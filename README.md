@@ -1,2 +1,2 @@
-# prestashop-20226
+# prestashop-2026
 Evaluation s6 2026
