@@ -1,0 +1,97 @@
+entite: name,entite mere
+categori :name
+titre utilisateur:name
+profil:name,profil par defaut boolean,choice interface,creation de ticket(desactiver par defaut)
+
+user: matricule,recursif(non par defaut),entite(racine par defaut)
+
+group: Visible dans un ticket Demandeur Observateur Attribué à Tâche Peut être notifié Visible dans un projet Peut être superviseur Peut contenir Éléments Utilisateurs 
+type: name
+modele: numero du produit,demie-largeur,images (face et arriere)
+fabricant:
+source de mise a jour,
+ordinateur:numero de serie,numero inventaire
+
+tickets:type,status,id Externe,niveau de service(TTO,TTR,)
+demande Service:
+signaler un incident:
+
+
+ordre de reinitilisation:
+    tickets
+    problèmes/changements
+    matériels
+    groupes
+    utilisateurs
+    fabricants
+    lieux
+    catégories
+    entités (en dernier)
+
+
+
+   get /Administration/Group  : [
+  {
+    "id": 0,
+    "name": "string",
+    "comment": "string",
+    "completename": "string",
+    "parent": {
+      "id": 0,
+      "name": "string"
+    },
+    "level": 0,
+    "entity": {
+      "id": 0,
+      "name": "string"
+    },
+    "code": "string",
+    "ldap_field": "string",
+    "ldap_value": "string",
+    "ldap_group_dn": "string",
+    "maybe_requester": true,
+    "maybe_observer": true,
+    "maybe_assigned": true,
+    "maybe_assigned_task": true,
+    "maybe_notified": true,
+    "may_contain_items": true,
+    "may_contain_users": true,
+    "maybe_manager": true,
+    "recursive_membership": true,
+    "mfa_enforced": true,
+    "date_creation": "2026-06-05T12:00:20.484Z",
+    "date_mod": "2026-06-05T12:00:20.484Z"
+  }
+]
+
+POST /Administration/Group :
+{
+  "name": "string",
+  "comment": "string",
+  "parent": {
+    "id": 0,
+    "name": "string"
+  },
+  "entity": {},
+  "code": "string",
+  "ldap_field": "string",
+  "ldap_value": "string",
+  "ldap_group_dn": "string",
+  "maybe_requester": true,
+  "maybe_observer": true,
+  "maybe_assigned": true,
+  "maybe_assigned_task": true,
+  "maybe_notified": true,
+  "may_contain_items": true,
+  "may_contain_users": true,
+  "maybe_manager": true,
+  "recursive_membership": true,
+  "mfa_enforced": true,
+  "date_creation": "2026-06-05T12:00:54.853Z",
+  "date_mod": "2026-06-05T12:00:54.853Z"
+}
+delete:
+{
+  "id": 0,
+  "href": "string"
+}
