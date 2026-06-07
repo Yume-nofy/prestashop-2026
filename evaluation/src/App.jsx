@@ -7,6 +7,11 @@ import TableauSquelette from './squelette/Tableau';
 import Popup from './squelette/Popup';
 import LoginBack from './components/LoginBack';
 import Home from './components/Home'; 
+import CsvDynamicTester from './components/CsvDynamicTester';
+import GlpiItemList from './components/GlpiItemList';
+import CreateTicket from './components/CreateTicket';
+import GlpiDashboard from './components/GlpiDashboard';
+import TicketsList from './components/TicketsList';
 
 const Login = () => (
   <div style={styles.center}>
@@ -18,6 +23,13 @@ const Login = () => (
   </div>
 );
 
+const ProtectedAdmin = ({ children }) => {
+  const isAuthenticated = !!localStorage.getItem('adminSession'); 
+  if (!isAuthenticated) {
+    return <Navigate to="/LoginBack" replace />;
+  }
+  return children;
+};
 const ProtectedRoute = ({ children }) => {
   const isAuthenticated = !!localStorage.getItem('token'); 
   if (!isAuthenticated) {
@@ -34,6 +46,30 @@ const router = createBrowserRouter([
   {
     path: '/login',
     element: <Login />
+  },
+  {
+    path: '/admin',
+    element: (
+      <ProtectedAdmin>
+        <GlpiDashboard/>  
+      </ProtectedAdmin>
+    )
+  },
+  {
+    path: '/adminTicket',
+    element: <TicketsList />
+  },
+  {
+    path: '/list',
+    element: <GlpiItemList />
+  },
+  {
+    path: '/ticket',
+    element: (
+      <ProtectedAdmin>
+        <CreateTicket />
+      </ProtectedAdmin>
+    )
   },
   {
     path: '/',
@@ -74,6 +110,9 @@ const router = createBrowserRouter([
         <AddUser />
       </ProtectedRoute>
     )
+  },{
+    path:'/testCsv',
+    element:<ProtectedAdmin><CsvDynamicTester/></ProtectedAdmin>
   },
   {
     path: '*', 

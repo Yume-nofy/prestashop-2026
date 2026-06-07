@@ -25,14 +25,78 @@ export const addUser = async({formdata}) =>{
     throw error;
   }
 };
-export const deleteUser = async(id)=>{
-  try{
-      const idUser=id;
-      await apiGlpi(`User/${idUser}?force_purge=1`, {
-      method: 'DELETE'
+export const deleteUser = async (id) => {
+  try {
+    const response = await apiGlpi(`User/${id}`, {
+      method: 'DELETE',
+      body: JSON.stringify({
+        force_purge: true
+      })
     });
-    }catch(error){
-      console.log(error);
-      throw error;
+
+    return response;
+  } catch (error) {
+    console.error(`Erreur suppression user ${id}:`, error);
+    throw error;
+  }
+};
+export const getGlpiUserId = async (userFullName) => {
+  try {
+    if (!userFullName) return 0;
+
+    const [lastName, firstName] = userFullName.split(' ');
+
+    const query = `User?criteria[0][field]=2&criteria[0][searchtype]=contains&criteria[0][value]=${lastName}
+                   &criteria[1][link]=AND
+                   &criteria[1][field]=34&criteria[1][searchtype]=contains&criteria[1][value]=${firstName}`;
+
+    const response = await apiGlpi(query, { method: 'GET' });
+
+    if (response?.data?.length > 0) {
+      return response.data[0].id;
     }
+
+    return 0;
+  } catch (error) {
+    console.error(error);
+    return 0;
+  }
+};
+export const linkUserToGroup = async (userId, groupId) => {
+  try {
+    const payload = {
+      input: {
+        users_id: userId,
+        groups_id: groupId
+      }
+    };
+
+    return await apiGlpi('Group_User', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  } catch (error) {
+    console.error(`Erreur lors de la liaison User ${userId} <-> Group ${groupId} :`, error);
+  }
+};
+export const createGlpiUser = async (userNameOrEmail) => {
+  try {
+    const login = userNameOrEmail;
+    
+    const payload = {
+      input: {
+        name: login,
+        realname: login,
+        is_active: 1
+      }
+    };
+
+    return await apiGlpi('User', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  } catch (error) {
+    console.error(`Erreur lors de la création de l'utilisateur ${userNameOrEmail} :`, error);
+    throw error;
+  }
 };

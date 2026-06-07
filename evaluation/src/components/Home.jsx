@@ -3,15 +3,10 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { initGlpiSession } from '../api/apiGlpi'; 
 import { createGlpiCustomStatus, createGlpiStatus } from '../services/CrudService';
+import GlpiReset from './GlpiReset';
 const Home = () => {
   const navigate = useNavigate();
-    const test= async()=>{
-        await createGlpiCustomStatus("Parfait",{isComputer: true,
-  isMonitor: false,     
-  isPeripheral: false,  
-  isPhone: false,
-  isNetwork: false});
-    }
+   
   const handleLogin = async () => {
     try {
       await initGlpiSession();
@@ -21,7 +16,7 @@ const Home = () => {
     }
   };
   const handleFront =()=>{
-    navigate("/front");
+    navigate("/testCsv");
   }
 
   return (
@@ -35,7 +30,7 @@ const Home = () => {
         <button onClick={handleFront} style={styles.button}>
           voir le frontOffice
         </button>
-        <button onClick={test}> test ajout model</button>
+        
       </div>
     </div>
   );
