@@ -7,7 +7,7 @@ import {
   getGlpiStatuses, deleteGlpiStatus,purgeAllGlpiTickets
 } from '../services/CrudService';
 import { deleteUser,getGlpiUsers} from '../services/testApi';
-const ITEM_TYPES = ['Computer', 'Monitor']; 
+const ITEM_TYPES = ['Computer', 'Monitor', 'NetworkEquipment', 'Peripheral']; 
 
 const GlpiReset = () => {
   const [isResetting, setIsResetting] = useState(false);

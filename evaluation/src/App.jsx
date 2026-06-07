@@ -13,15 +13,23 @@ import CreateTicket from './components/CreateTicket';
 import GlpiDashboard from './components/GlpiDashboard';
 import TicketsList from './components/TicketsList';
 
-const Login = () => (
-  <div style={styles.center}>
-    <h2>Page de Connexion </h2>
-    <button onClick={() => {const navigate= useNavigate(); navigate("/LoginBack"); }}>
+import AdminLayout from './components/AdminLayout';
+import ResetData from './components/ResetData';
 
-    </button>
-   
-  </div>
-);
+const Login = () => {
+  const navigate = useNavigate(); 
+  return (
+    <div style={styles.center}>
+      <h2>Page de Connexion</h2>
+      <button 
+        onClick={() => navigate("/LoginBack")}
+        style={{ padding: '10px 20px', cursor: 'pointer', fontWeight: 'bold' }}
+      >
+        Se connecter au Backoffice
+      </button>
+    </div>
+  );
+};
 
 const ProtectedAdmin = ({ children }) => {
   const isAuthenticated = !!localStorage.getItem('adminSession'); 
@@ -30,6 +38,7 @@ const ProtectedAdmin = ({ children }) => {
   }
   return children;
 };
+
 const ProtectedRoute = ({ children }) => {
   const isAuthenticated = !!localStorage.getItem('token'); 
   if (!isAuthenticated) {
@@ -43,38 +52,71 @@ const styles = {
 };
 
 const router = createBrowserRouter([
+  // --- ROUTES PUBLIQUES / FRONTOFFICE ---
+  {
+    path: '/',
+    element: <Home />
+  },
   {
     path: '/login',
     element: <Login />
   },
   {
-    path: '/admin',
-    element: (
-      <ProtectedAdmin>
-        <GlpiDashboard/>  
-      </ProtectedAdmin>
-    )
-  },
-  {
-    path: '/adminTicket',
-    element: <TicketsList />
+    path: '/LoginBack',
+    element: <LoginBack />
   },
   {
     path: '/list',
     element: <GlpiItemList />
   },
   {
-    path: '/ticket',
+    path: '/ticket', // Création de ticket utilisateur
+    element: <CreateTicket />
+  },
+
+  // --- ROUTES BACKOFFICE (PROTÉGÉES + LAYOUT COMMUN) ---
+  {
+    path: '/admin',
     element: (
       <ProtectedAdmin>
-        <CreateTicket />
+        <AdminLayout>
+          <GlpiDashboard />
+        </AdminLayout>
       </ProtectedAdmin>
     )
   },
   {
-    path: '/',
-    element: <Home />
+    path: '/adminTicket',
+    element: (
+      <ProtectedAdmin>
+        <AdminLayout>
+          <TicketsList />
+        </AdminLayout>
+      </ProtectedAdmin>
+    )
   },
+  {
+    path: '/testCsv', // Page pour importer tes 4 fichiers (3 CSV + 1 ZIP)
+    element: (
+      <ProtectedAdmin>
+        <AdminLayout>
+          <CsvDynamicTester />
+        </AdminLayout>
+      </ProtectedAdmin>
+    )
+  },
+  {
+    path: '/admin/reset', // Page dédiée pour la réinitialisation de l'application
+    element: (
+      <ProtectedAdmin>
+        <AdminLayout>
+          <ResetData />
+        </AdminLayout>
+      </ProtectedAdmin>
+    )
+  },
+
+  // --- ENCIENNES ROUTES DE TEST (À GARDER OU TRIER PLUS TARD) ---
   {
     path: '/tableau',
     element: (
@@ -92,10 +134,6 @@ const router = createBrowserRouter([
     )
   },
   {
-    path: '/LoginBack',
-    element: <LoginBack />
-  },
-  {
     path: '/test-users',
     element: (
       <ProtectedRoute>
@@ -110,13 +148,10 @@ const router = createBrowserRouter([
         <AddUser />
       </ProtectedRoute>
     )
-  },{
-    path:'/testCsv',
-    element:<ProtectedAdmin><CsvDynamicTester/></ProtectedAdmin>
   },
   {
     path: '*', 
-    element: <div style={styles.center}><h2>404 - Page introuvable </h2></div>
+    element: <div style={styles.center}><h2>404 - Page introuvable</h2></div>
   }
 ]);
 

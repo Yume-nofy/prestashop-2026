@@ -10,14 +10,13 @@ import {
   createGlpiTicket,  
   linkItemToTicket,
   addUserProfileAndEntity,
-  addGlpiTicketCost,updateTicketExternalId,
+  addGlpiTicketCost, updateTicketExternalId,
   uploadGlpiDocument, 
   linkDocumentToItem
 } from '../services/CrudService';
 import { getGlpiUserId, createGlpiUser, linkUserToGroup } from '../services/testApi';
-import GlpiReset from './GlpiReset';
 
-const GlpiImporter = () => {
+const CsvDynamicTester = () => {
   const { data: devicesData, parseFile: parseDevicesFile } = useCsvParser({ separator: ',' });
   const { ticketData, parseTicketFile } = useTicketCsvParser({ separator: ',' });
   const [zipFile, setZipFile] = useState(null);
@@ -29,12 +28,18 @@ const GlpiImporter = () => {
 
   const handleDevicesUpload = (e) => {
     const file = e.target.files[0];
-    if (file) parseDevicesFile(file);
+    if (file) {
+      parseDevicesFile(file);
+      addLog(`Fichier Parc chargé : ${file.name}`);
+    }
   };
 
   const handleTicketsUpload = (e) => {
     const file = e.target.files[0];
-    if (file) parseTicketFile(file);
+    if (file) {
+      parseTicketFile(file);
+      addLog(`Fichier Tickets chargé : ${file.name}`);
+    }
   };
 
   const handleCostsUpload = (e) => {
@@ -55,10 +60,12 @@ const GlpiImporter = () => {
           });
         
         setCostsData(parsed);
+        addLog(`Fichier Coûts & Durées chargé : ${file.name}`);
       };
       reader.readAsText(file);
     }
   };
+
   const handleZipUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -66,6 +73,7 @@ const GlpiImporter = () => {
       addLog(`Fichier ZIP d'images sélectionné : ${file.name}`);
     }
   };
+
   const startImport = async () => {
     setImporting(true);
     setLogs([]);
@@ -74,7 +82,6 @@ const GlpiImporter = () => {
 
     try {
       addLog("Initialisation de la session GLPI...");
-      
       addLog("Création des groupes...");
       const groupMap = {};
       await Promise.all(devicesData.locations.map(async (loc) => {
@@ -123,7 +130,7 @@ const GlpiImporter = () => {
           if (!userId) {
             userId = await getGlpiUserId(userName);
             if (!userId || userId === 0) {
-              addLog(`👤 Utilisateur inconnu. Tentative de création pour : ${userName}...`);
+              addLog(`Utilisateur inconnu. Tentative de création pour : ${userName}...`);
               const newUserRes = await createGlpiUser(userName);
               if (newUserRes && newUserRes.id) {
                 userId = newUserRes.id;
@@ -133,7 +140,7 @@ const GlpiImporter = () => {
                 throw new Error("L'API GLPI n'a pas renvoyé d'ID valide lors de la création.");
               }
             } else {
-              addLog(`🔍 Utilisateur existant trouvé dans GLPI : ${userName} (ID: ${userId})`);
+              addLog(`Utilisateur existant trouvé dans GLPI : ${userName} (ID: ${userId})`);
             }
             userMap[userName] = userId;
           }
@@ -148,7 +155,7 @@ const GlpiImporter = () => {
             }
           }
         } catch (userErr) {
-          addLog(`⚠️ Échec sur l'utilisateur ${userName} : ${userErr.message}`);
+          addLog(`Échec sur l'utilisateur ${userName} : ${userErr.message}`);
         }
       }
 
@@ -184,13 +191,13 @@ const GlpiImporter = () => {
           }
         }));
       }
+
       if (zipFile && Object.keys(createdDevicesMap).length > 0) {
         addLog(`Désarchivage et traitement des images depuis : ${zipFile.name}...`);
         try {
           const zip = new JSZip();
           const jsonContent = await zip.loadAsync(zipFile);
           
-          // Filtrer uniquement les extensions d'images en évitant les sous-dossiers vides
           const imageFiles = Object.keys(jsonContent.files).filter(fileName => {
             const isFolder = jsonContent.files[fileName].dir;
             const isImage = /\.(jpe?g|png)$/i.test(fileName);
@@ -201,7 +208,7 @@ const GlpiImporter = () => {
 
           for (const filePath of imageFiles) {
             const fileNameWithExt = filePath.split('/').pop();
-            const assetKey = fileNameWithExt.replace(/\.[^/.]+$/, "").trim(); // ex: "PC-ADM-001"
+            const assetKey = fileNameWithExt.replace(/\.[^/.]+$/, "").trim();
 
             const matchedAsset = createdDevicesMap[assetKey];
 
@@ -221,20 +228,16 @@ const GlpiImporter = () => {
             }
           }
         } catch (zipErr) {
-          addLog(`⚠️ Échec de l'importation des images ZIP : ${zipErr.message}`);
+          addLog(`Échec de l'importation des images ZIP : ${zipErr.message}`);
           console.error(zipErr);
         }
       }
-   // =========================================================
-      // 2. IMPORTATION ET LIAISON DES TICKETS AVEC DOSSIER COÛTS
-      // =========================================================
+
       if (ticketData && ticketData.length > 0) {
         addLog(`Traitement de ${ticketData.length} ticket(s) avec analyse des coûts...`);
 
-        // Indexation propre et sans espaces des coûts
         const costsMapByTicketNum = {};
         costsData.forEach(item => {
-          // On cherche toutes les variantes possibles de clé pour le numéro de ticket
           const numTicketKey = item.Num_Ticket || item.num_ticket || item.Num_ticket;
           if (numTicketKey) {
             costsMapByTicketNum[String(numTicketKey).trim()] = item;
@@ -243,7 +246,6 @@ const GlpiImporter = () => {
 
         for (const ticket of ticketData) {
           try {
-            // 🔍 NORMALISATION DES CLÉS DU CSV TICKETS (Accepte les majuscules et minuscules)
             const csvRef = String(ticket.Ref_Ticket || ticket.refTicket || ticket.Ref_ticket || ticket.id || "").trim();
             const csvDate = String(ticket.Date || ticket.date || "").trim();
             const csvTime = String(ticket.Heure || ticket.time || ticket.heure || "").trim();
@@ -253,13 +255,10 @@ const GlpiImporter = () => {
             const csvPriority = ticket.Priority || ticket.priority || "Medium";
             const csvStatus = ticket.Status || ticket.status || "New";
 
-            // Si on n'a pas de référence de ticket, impossible de faire la liaison
             if (!csvRef || csvRef === "undefined" || csvRef === "") {
-              console.warn("Ticket sauté car Ref_Ticket introuvable dans la ligne :", ticket);
               continue; 
             }
 
-            // Formatage de la date GLPI (JJ/MM/AAAA -> AAAA-MM-JJ)
             const [day, month, year] = csvDate.split('/');
             const formattedDate = `${year}-${month}-${day}`;
             let formattedTime = csvTime;
@@ -268,7 +267,6 @@ const GlpiImporter = () => {
             }
             const finalGlpiDateTime = `${formattedDate} ${formattedTime}`;
 
-            // Récupération des données du 3ème CSV via la clé normalisée
             const matchedCostRow = costsMapByTicketNum[csvRef];
 
             const parseCsvNumber = (val) => {
@@ -281,15 +279,11 @@ const GlpiImporter = () => {
             let costFixed = 0;
 
             if (matchedCostRow) {
-              // Extraction des durées et coûts du 3ème CSV (avec fallbacks de clés)
               durationSeconds = parseInt(matchedCostRow.Duration_second || matchedCostRow.duration_second || 0, 10);
               costTime = parseCsvNumber(matchedCostRow.secondTime_Cost || matchedCostRow.Time_Cost || matchedCostRow.time_cost);
               costFixed = parseCsvNumber(matchedCostRow.CostFixed || matchedCostRow.cost_fixed || matchedCostRow.Fixed_Cost);
-            } else {
-              console.warn(`[Liaison Coûts] Aucune correspondance financière trouvée pour la Ref_Ticket : ${csvRef}`);
             }
 
-            // Étape A : Création du ticket principal (transmet bien duration et externalRef)
             const ticketRes = await createGlpiTicket({
               title: csvTitle,
               description: csvDesc,
@@ -302,21 +296,16 @@ const GlpiImporter = () => {
             });
 
             const newTicketId = ticketRes.id;
-
-              await updateTicketExternalId(newTicketId, csvRef);
-            
+            await updateTicketExternalId(newTicketId, csvRef);
             
             if (newTicketId) {
-              addLog(`Ticket #${newTicketId} créé avec succès (Ref CSV: ${csvRef}) | Durée: ${durationSeconds}s`);
+              addLog(`Ticket #${newTicketId} créé (Ref CSV: ${csvRef}) | Durée: ${durationSeconds}s`);
 
-              // Étape B : Injection des coûts dans l'endpoint TicketCost si des montants existent
               if (costFixed > 0 || costTime > 0) {
-                const costRes = await addGlpiTicketCost(newTicketId, costFixed, costTime);
-                console.log(`[GLPI API] Réponse création coût pour Ticket #${newTicketId}:`, costRes);
+                await addGlpiTicketCost(newTicketId, costFixed, costTime);
                 addLog(`   -> Coûts associés | Fixe: ${costFixed} MGA | Temps: ${costTime} MGA`);
               }
 
-              // Étape C : Liaison des équipements (Gestion du tableau ou de la String JSON)
               let itemsArray = [];
               const rawItems = ticket.Items1 || ticket.items || ticket.Items;
               
@@ -325,7 +314,6 @@ const GlpiImporter = () => {
                   try {
                     itemsArray = JSON.parse(rawItems);
                   } catch {
-                    // Nettoyage au cas où les guillemets ou crochets foirent dans le CSV brut
                     itemsArray = rawItems.split(',').map(i => i.replace(/["'[\]]/g, '').trim());
                   }
                 } else if (Array.isArray(rawItems)) {
@@ -340,97 +328,116 @@ const GlpiImporter = () => {
                     await linkItemToTicket(newTicketId, matchedDevice.type, matchedDevice.id);
                     addLog(`   -> Équipement lié : ${itemName} (${matchedDevice.type})`);
                   } else {
-                    addLog(`   ⚠️ Équipement "${itemName}" introuvable dans le parc.`);
+                    addLog(`   -> Matériel "${itemName}" absent du parc.`);
                   }
                 }
               }
-            } else {
-              throw new Error("L'API GLPI n'a pas renvoyé d'ID de ticket valide.");
             }
 
           } catch (ticketError) {
-            addLog(`❌ Erreur traitement ticket (Ligne CSV) : ${ticketError.message}`);
-            console.error(ticketError);
+            addLog(`Erreur traitement ligne ticket : ${ticketError.message}`);
           }
         }
       }
-      addLog("🚀 Processus d'importation globale terminé avec succès !");
+      addLog("Processus d'importation globale terminé avec succès !");
     } catch (error) {
       addLog(`ERREUR CRITIQUE GLOBALE : ${error.message}`);
-      console.error(error);
     } finally {
       setImporting(false);
     }
   };
 
   return (
-    <div style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '1000px', margin: '0 auto' }}>
-      <h2>Importateur GLPI Automatisé</h2>
-      
-      <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
-        <div style={{ flex: 1, padding: '15px', border: '1px solid #ddd', borderRadius: '4px' }}>
-          <h4>1. Fichier du Parc (CSV)</h4>
-          <input type="file" accept=".csv" onChange={handleDevicesUpload} disabled={importing} />
-          {devicesData.statuses.length > 0 && (
-            <p style={{ color: 'green', fontSize: '13px' }}>✅ Fichier parc chargé.</p>
-          )}
+    <div style={styles.page}>
+      <div style={styles.header}>
+        <h2 style={styles.mainTitle}>Importation de Données Intégrales</h2>
+        <p style={styles.subtitle}>Sélectionnez les fichiers CSV du contenu (Contenu Import-data-juin-26) ainsi que l'archive ZIP des images associées.</p>
+      </div>
+
+      <div style={styles.grid}>
+        {/* Fichier 1 */}
+        <div style={styles.card}>
+          <div style={styles.cardHeader}>1. Structure & Parc informatique</div>
+          <div style={styles.inputWrapper}>
+            <input type="file" accept=".csv" onChange={handleDevicesUpload} disabled={importing} style={styles.fileInput} id="file-parc"/>
+            <label htmlFor="file-parc" style={styles.fileLabel}>Choisir un fichier CSV</label>
+            {devicesData?.statuses?.length > 0 && <div style={styles.badgeSuccess}>Fichier prêt</div>}
+          </div>
         </div>
 
-        <div style={{ flex: 1, padding: '15px', border: '1px solid #ddd', borderRadius: '4px' }}>
-          <h4>2. Fichier des Tickets (CSV)</h4>
-          <input type="file" accept=".csv" onChange={handleTicketsUpload} disabled={importing} />
-          {ticketData.length > 0 && (
-            <p style={{ color: 'green', fontSize: '13px' }}>✅ Fichier tickets chargé ({ticketData.length} lignes).</p>
-          )}
+        {/* Fichier 2 */}
+        <div style={styles.card}>
+          <div style={styles.cardHeader}>2. Registre des Tickets d'Assistance</div>
+          <div style={styles.inputWrapper}>
+            <input type="file" accept=".csv" onChange={handleTicketsUpload} disabled={importing} style={styles.fileInput} id="file-tickets"/>
+            <label htmlFor="file-tickets" style={styles.fileLabel}>Choisir un fichier CSV</label>
+            {ticketData?.length > 0 && <div style={styles.badgeSuccess}>{ticketData.length} tickets chargés</div>}
+          </div>
         </div>
 
-        <div style={{ flex: 1, padding: '15px', border: '1px solid #ddd', borderRadius: '4px', backgroundColor: '#fcfcfc' }}>
-          <h4>3. Coûts & Durées (CSV)</h4>
-          <input type="file" accept=".csv" onChange={handleCostsUpload} disabled={importing} />
-          {costsData.length > 0 && (
-            <p style={{ color: 'green', fontSize: '13px' }}>✅ {costsData.length} lignes financières prêtes.</p>
-          )}
+        {/* Fichier 3 */}
+        <div style={styles.card}>
+          <div style={styles.cardHeader}>3. Grille de Tarification & Coûts</div>
+          <div style={styles.inputWrapper}>
+            <input type="file" accept=".csv" onChange={handleCostsUpload} disabled={importing} style={styles.fileInput} id="file-costs"/>
+            <label htmlFor="file-costs" style={styles.fileLabel}>Choisir un fichier CSV</label>
+            {costsData?.length > 0 && <div style={styles.badgeSuccess}>{costsData.length} lignes financières</div>}
+          </div>
         </div>
-        <div style={{ padding: '15px', border: '1px solid #ddd', borderRadius: '4px', backgroundColor: '#fcfcfc' }}>
-          <h4>4. Images Assets (ZIP)</h4>
-          <input type="file" accept=".zip" onChange={handleZipUpload} disabled={importing} />
-          {zipFile && (
-            <p style={{ color: 'green', fontSize: '13px' }}>✅ Archive ZIP prête ({zipFile.name}).</p>
-          )}
+
+        {/* Fichier 4 */}
+        <div style={styles.card}>
+          <div style={styles.cardHeader}>4. Album d'Images des Équipements</div>
+          <div style={styles.inputWrapper}>
+            <input type="file" accept=".zip" onChange={handleZipUpload} disabled={importing} style={styles.fileInput} id="file-zip"/>
+            <label htmlFor="file-zip" style={styles.fileLabel}>Choisir une archive ZIP</label>
+            {zipFile && <div style={styles.badgeSuccess}>Archive ZIP validée</div>}
+          </div>
         </div>
       </div>
-      
-      {devicesData.statuses.length > 0 && (
-        <div style={{ marginTop: '20px', textAlign: 'center' }}>
-          <button 
-            onClick={startImport} 
-            disabled={importing}
-            style={{ 
-              padding: '12px 30px', 
-              backgroundColor: '#007bff', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '4px', 
-              cursor: importing ? 'not-allowed' : 'pointer',
-              fontWeight: 'bold',
-              fontSize: '15px'
-            }}
-          >
-            {importing ? "Importation globale en cours..." : "Lancer l'importation complète"}
+
+      {devicesData?.statuses?.length > 0 && (
+        <div style={styles.actionSection}>
+          <button onClick={startImport} disabled={importing} style={importing ? styles.btnDisabled : styles.btnActive}>
+            {importing ? "Exécution du traitement de masse..." : "Déclencher l'injection globale"}
           </button>
         </div>
       )}
 
-      <GlpiReset />
-
-      <div style={{ marginTop: '20px', backgroundColor: '#1e1e1e', color: '#39ff14', padding: '15px', height: '300px', overflowY: 'auto', borderRadius: '4px', fontFamily: 'monospace' }}>
-        <h4 style={{ color: 'white', marginTop: 0 }}>Console d'importation :</h4>
-        <div>
-          {logs.map((log, i) => <div key={i} style={{ fontSize: '12px', marginBottom: '4px' }}>{log}</div>)}
+      <div style={styles.terminalContainer}>
+        <div style={styles.terminalHeader}>Flux d'exécution de l'analyseur :</div>
+        <div style={styles.terminalContent}>
+          {logs.length === 0 ? (
+            <div style={styles.emptyLog}>Aucun traitement en cours. En attente de fichiers d'entrée.</div>
+          ) : (
+            logs.map((log, i) => <div key={i} style={styles.logLine}>{log}</div>)
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-export default GlpiImporter;
+const styles = {
+  page: { backgroundColor: '#121212', color: '#f8fafc', fontFamily: 'system-ui, -apple-system, sans-serif', minHeight: '100vh' },
+  header: { marginBottom: '32px' },
+  mainTitle: { fontSize: '24px', fontWeight: '700', color: '#00d2ff', margin: '0 0 8px 0' },
+  subtitle: { fontSize: '14px', color: '#cbd5e1', margin: 0 },
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '32px' },
+  card: { backgroundColor: '#1e1e1e', border: '1px solid #334155', borderRadius: '8px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' },
+  cardHeader: { fontSize: '14px', fontWeight: '600', color: '#cbd5e1', borderBottom: '1px solid #334155', paddingBottom: '10px' },
+  inputWrapper: { display: 'flex', flexDirection: 'column', gap: '10px' },
+  fileInput: { display: 'none' },
+  fileLabel: { display: 'block', textAlign: 'center', backgroundColor: 'transparent', border: '1px solid #334155', color: '#00d2ff', padding: '10px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', transition: 'all 0.2s' },
+  badgeSuccess: { backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid #10b981', color: '#10b981', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', textAlign: 'center', fontWeight: '600' },
+  actionSection: { display: 'flex', justifyContent: 'center', marginBottom: '32px' },
+  btnActive: { backgroundColor: '#00d2ff', color: '#121212', border: 'none', padding: '14px 40px', borderRadius: '6px', cursor: 'pointer', fontWeight: '700', fontSize: '15px', transition: 'background 0.2s' },
+  btnDisabled: { backgroundColor: '#1e293b', color: '#64748b', border: '1px solid #334155', padding: '14px 40px', borderRadius: '6px', cursor: 'not-allowed', fontWeight: '700', fontSize: '15px' },
+  terminalContainer: { backgroundColor: '#121212', border: '1px solid #334155', borderRadius: '8px', padding: '20px', fontFamily: 'Consolas, Monaco, monospace' },
+  terminalHeader: { fontSize: '13px', fontWeight: '600', color: '#00d2ff', textTransform: 'uppercase', marginBottom: '14px', letterSpacing: '0.5px' },
+  terminalContent: { height: '260px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' },
+  emptyLog: { color: '#64748b', fontSize: '13px', fontStyle: 'italic' },
+  logLine: { fontSize: '13px', color: '#cbd5e1', borderLeft: '2px solid #334155', paddingLeft: '8px', lineHeight: '1.4' }
+};
+
+export default CsvDynamicTester;

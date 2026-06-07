@@ -3,14 +3,12 @@ import { fetchGlpiItems, linkItemToTicket } from '../services/CrudService';
 import { apiGlpi } from '../api/apiGlpi';
 
 const CreateTicket = () => {
-  // États du formulaire de ticket
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [urgency, setUrgency] = useState('3'); 
 
-  // États pour la liste du parc et la sélection
   const [availableItems, setAvailableItems] = useState([]);
-  const [selectedItems, setSelectedItems] = useState([]); // Tableau d'objets [{id, itemtype, name}]
+  const [selectedItems, setSelectedItems] = useState([]); 
   
   const [loading, setLoading] = useState(false);
   const [loadingParc, setLoadingParc] = useState(true);
@@ -20,7 +18,6 @@ const CreateTicket = () => {
     loadParcItems();
   }, []);
 
-  // Charger tous les éléments disponibles pour pouvoir les associer au ticket
   const loadParcItems = async () => {
     try {
       const typesToFetch = ['Computer', 'Monitor', 'NetworkEquipment', 'Peripheral'];
@@ -42,18 +39,16 @@ const CreateTicket = () => {
       const results = await Promise.all(promises);
       setAvailableItems(results.flat());
     } catch (err) {
-      console.error("Erreur lors du chargement des éléments du parc", err);
+      console.error("Erreur lors du chargement des elements du parc", err);
     } finally {
       setLoadingParc(false);
     }
   };
 
-  // Gérer l'ajout d'un élément à la liste des éléments associés
   const handleAddItem = (e) => {
     const value = e.target.value;
     if (!value) return;
 
-    // La valeur contient "itemtype-id"
     const [itemtype, id] = value.split('-');
     const itemToAdd = availableItems.find(i => i.id === parseInt(id) && i.itemtype === itemtype);
 
@@ -61,17 +56,14 @@ const CreateTicket = () => {
       setSelectedItems([...selectedItems, itemToAdd]);
     }
     
-    // Réinitialiser le select
     e.target.value = '';
   };
 
-  // Retirer un élément de la liste des associations
   const handleRemoveItem = (itemtype, id) => {
     setSelectedItems(selectedItems.filter(i => !(i.id === id && i.itemtype === itemtype)));
   };
 
-  // Soumission du ticket
- const handleSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title || !content) {
       setMessage({ text: 'Veuillez remplir le titre et la description.', type: 'error' });
@@ -82,23 +74,19 @@ const CreateTicket = () => {
     setMessage({ text: '', type: '' });
 
     try {
-      // Nettoyage du contenu pour éviter les caractères invisibles de coupure JSON
       const cleanContent = content.trim().replace(/[\r\n]+/g, '\\n');
 
-      // 1. Création du Ticket principal dans GLPI
-        const ticketResponse = await apiGlpi('Ticket', {
+      const ticketResponse = await apiGlpi('Ticket', {
         method: 'POST',
         body: JSON.stringify({
-            input: {
+          input: {
             name: title.trim(),
             content: cleanContent,
             urgency: parseInt(urgency, 10)
-            }
+          }
         })
-        });
+      });
 
-      // GLPI renvoie généralement une structure du type { id: 123, message: "..." }
-      // ou un tableau contenant un objet [{ id: 123, ... }]
       let createdTicketId = null;
       if (ticketResponse) {
         if (ticketResponse.id) {
@@ -109,10 +97,9 @@ const CreateTicket = () => {
       }
 
       if (!createdTicketId) {
-        throw new Error("L'API GLPI a accepté le JSON mais n'a pas retourné d'ID valide.");
+        throw new Error("L'API GLPI a accepte le JSON mais n'a pas retourne d'ID valide.");
       }
 
-      // 2. Association de chaque élément sélectionné au ticket créé
       if (selectedItems.length > 0) {
         const linkPromises = selectedItems.map(item => 
           linkItemToTicket(createdTicketId, item.itemtype, item.id)
@@ -120,95 +107,89 @@ const CreateTicket = () => {
         await Promise.all(linkPromises);
       }
 
-      setMessage({ text: `Ticket #${createdTicketId} créé et matériels associés avec succès !`, type: 'success' });
+      setMessage({ text: `Ticket #${createdTicketId} cree et materiels associes avec succes.`, type: 'success' });
       
-      // Réinitialisation du formulaire
       setTitle('');
       setContent('');
       setUrgency('3');
       setSelectedItems([]);
 
     } catch (err) {
-      console.error("Détails de l'erreur GLPI Payload:", err);
-      setMessage({ text: `Échec de la création du ticket : ${err.message}`, type: 'error' });
+      console.error("Details de l'erreur GLPI Payload:", err);
+      setMessage({ text: `Echec de la creation du ticket : ${err.message}`, type: 'error' });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '700px', margin: '0 auto' }}>
-      <h2 style={{ borderBottom: '2px solid #28a745', paddingBottom: '10px' }}>Créer un nouveau Ticket d'incident</h2>
+    <div style={styles.page}>
+      <div style={styles.header}>
+        <h2 style={styles.mainTitle}>Ouverture d'un Incident</h2>
+        <p style={styles.subtitle}>Enregistrez une nouvelle declaration d'anomalie dans le systeme de centralisation GLPI.</p>
+      </div>
 
       {message.text && (
-        <div style={{
-          padding: '12px',
-          borderRadius: '4px',
-          marginBottom: '20px',
-          fontWeight: 'bold',
-          backgroundColor: message.type === 'success' ? '#d4edda' : '#f8d7da',
-          color: message.type === 'success' ? '#155724' : '#721c24',
-          border: `1px solid ${message.type === 'success' ? '#c3e6cb' : '#f5c6cb'}`
-        }}>
+        <div style={message.type === 'success' ? styles.alertSuccess : styles.alertError}>
           {message.text}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+      <form onSubmit={handleSubmit} style={styles.form}>
         
-        {/* Titre du ticket */}
-        <div>
-          <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>Titre de l'incident</label>
+        {/* Titre */}
+        <div style={styles.formGroup}>
+          <label style={styles.label}>Intitule de l'incident</label>
           <input 
             type="text"
-            placeholder="Ex: Écran noir ou problème réseau informatique"
+            placeholder="Ex: Defaillance d'affichage ou rupture de liaison reseau"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc', boxSizing: 'border-box' }}
+            style={styles.input}
           />
         </div>
 
-        {/* Degré d'urgence */}
-        <div>
-          <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>Urgence</label>
+        {/* Urgence */}
+        <div style={styles.formGroup}>
+          <label style={styles.label}>Niveau d'urgence declare</label>
           <select 
             value={urgency}
             onChange={(e) => setUrgency(e.target.value)}
-            style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc', backgroundColor: '#fff' }}
+            style={styles.select}
           >
-            <option value="5">Très haute</option>
-            <option value="4">Haute</option>
-            <option value="3">Moyenne</option>
-            <option value="2">Basse</option>
-            <option value="1">Très basse</option>
+            <option value="5">5 - Tres haute</option>
+            <option value="4">4 - Haute</option>
+            <option value="3">3 - Moyenne</option>
+            <option value="2">2 - Basse</option>
+            <option value="1">1 - Tres basse</option>
           </select>
         </div>
 
-        {/* Description de l'incident */}
-        <div>
-          <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>Description détaillée</label>
+        {/* Description */}
+        <div style={styles.formGroup}>
+          <label style={styles.label}>Description detaillee des symptomes</label>
           <textarea 
             rows="5"
-            placeholder="Décrivez précisément le problème rencontré..."
+            placeholder="Saisissez les precisions techniques concernant le dysfonctionnement..."
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc', boxSizing: 'border-box', fontFamily: 'inherit' }}
+            style={styles.textarea}
           />
         </div>
 
-        {/* 🛠️ SÉLECTION ET ASSOCIATION MULTIPLE DE MATÉRIELS */}
-        <div style={{ border: '1px solid #e0e0e0', padding: '15px', borderRadius: '6px', backgroundColor: '#f9f9f9' }}>
-          <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px' }}>🚀 Associer des éléments du parc (Optionnel)</label>
+        {/* Association de materiels */}
+        <div style={styles.parcSection}>
+          <label style={styles.parcTitle}>Liaison d'equipements du parc (Optionnel)</label>
           
           {loadingParc ? (
-            <p style={{ fontSize: '13px', color: '#666' }}>Chargement des matériels disponibles...</p>
+            <p style={styles.loadingText}>Indexation des elements du parc en cours...</p>
           ) : (
             <select 
               onChange={handleAddItem}
               defaultValue=""
-              style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc', backgroundColor: '#fff', marginBottom: '10px' }}
+              style={styles.select}
             >
-              <option value="" disabled>-- Sélectionner un équipement à lier --</option>
+              <option value="" disabled>-- Selectionner un equipement a lier --</option>
               {availableItems.map(item => (
                 <option key={`${item.itemtype}-${item.id}`} value={`${item.itemtype}-${item.id}`}>
                   [{item.itemtype}] {item.name} {item.serial && `(S/N: ${item.serial})`}
@@ -217,40 +198,22 @@ const CreateTicket = () => {
             </select>
           )}
 
-          {/* Badge list des matériels actuellement ajoutés au panier de liaison */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' }}>
+          {/* Liste des badges d'association */}
+          <div style={styles.badgeContainer}>
             {selectedItems.map(item => (
-              <span key={`${item.itemtype}-${item.id}`} style={{
-                backgroundColor: '#e2e3e5',
-                color: '#383d41',
-                padding: '5px 10px',
-                borderRadius: '15px',
-                fontSize: '13px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                border: '1px solid #d6d8db'
-              }}>
-                <strong>{item.itemtype}:</strong> {item.name}
+              <span key={`${item.itemtype}-${item.id}`} style={styles.badge}>
+                <strong style={styles.badgeType}>{item.itemtype}:</strong> {item.name}
                 <button 
                   type="button"
                   onClick={() => handleRemoveItem(item.itemtype, item.id)}
-                  style={{
-                    border: 'none',
-                    background: 'none',
-                    color: '#721c24',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    padding: '0 2px'
-                  }}
+                  style={styles.badgeRemoveBtn}
                 >
                   &times;
                 </button>
               </span>
             ))}
             {selectedItems.length === 0 && (
-              <span style={{ fontSize: '12px', color: '#888', fontStyle: 'italic' }}>Aucun matériel lié pour le moment.</span>
+              <span style={styles.emptyBadgeText}>Aucune liaison active pour ce ticket.</span>
             )}
           </div>
         </div>
@@ -259,25 +222,39 @@ const CreateTicket = () => {
         <button 
           type="submit"
           disabled={loading}
-          style={{
-            backgroundColor: loading ? '#6c757d' : '#28a745',
-            color: '#fff',
-            padding: '12px',
-            border: 'none',
-            borderRadius: '4px',
-            fontWeight: 'bold',
-            fontSize: '16px',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            transition: 'background 0.2s',
-            marginTop: '10px'
-          }}
+          style={loading ? styles.btnDisabled : styles.btnActive}
         >
-          {loading ? '⏳ Enregistrement du ticket...' : 'Créer le Ticket d\'incident'}
+          {loading ? 'Enregistrement du ticket...' : 'Valider et creer le ticket'}
         </button>
 
       </form>
     </div>
   );
+};
+
+const styles = {
+  page: { backgroundColor: '#121212', color: '#f8fafc', fontFamily: 'system-ui, -apple-system, sans-serif' },
+  header: { borderBottom: '1px solid #334155', paddingBottom: '16px', marginBottom: '24px' },
+  mainTitle: { fontSize: '22px', fontWeight: '700', color: '#00d2ff', margin: '0 0 6px 0' },
+  subtitle: { fontSize: '13px', color: '#cbd5e1', margin: 0 },
+  alertSuccess: { padding: '12px 16px', borderRadius: '6px', marginBottom: '20px', fontSize: '13px', fontWeight: '600', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid #10b981', color: '#10b981' },
+  alertError: { padding: '12px 16px', borderRadius: '6px', marginBottom: '20px', fontSize: '13px', fontWeight: '600', backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444' },
+  form: { display: 'flex', flexDirection: 'column', gap: '20px' },
+  formGroup: { display: 'flex', flexDirection: 'column', gap: '6px' },
+  label: { fontSize: '13px', fontWeight: '600', color: '#cbd5e1' },
+  input: { width: '100%', padding: '10px 12px', backgroundColor: '#1e1e1e', border: '1px solid #334155', borderRadius: '6px', color: '#f8fafc', fontSize: '13px', boxSizing: 'border-box' },
+  select: { width: '100%', padding: '10px 12px', backgroundColor: '#1e1e1e', border: '1px solid #334155', borderRadius: '6px', color: '#f8fafc', fontSize: '13px', boxSizing: 'border-box' },
+  textarea: { width: '100%', padding: '10px 12px', backgroundColor: '#1e1e1e', border: '1px solid #334155', borderRadius: '6px', color: '#f8fafc', fontSize: '13px', boxSizing: 'border-box', fontFamily: 'inherit', resize: 'vertical' },
+  parcSection: { backgroundColor: '#1e1e1e', border: '1px solid #334155', padding: '20px', borderRadius: '8px' },
+  parcTitle: { display: 'block', fontSize: '13px', fontWeight: '700', color: '#00d2ff', marginBottom: '12px' },
+  loadingText: { fontSize: '12px', color: '#64748b', margin: 0, fontFamily: 'monospace' },
+  badgeContainer: { display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '14px' },
+  badge: { backgroundColor: '#121212', color: '#cbd5e1', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '10px', border: '1px solid #334155' },
+  badgeType: { color: '#00d2ff' },
+  badgeRemoveBtn: { border: 'none', background: 'none', color: '#ef4444', fontWeight: '700', cursor: 'pointer', fontSize: '14px', padding: 0 },
+  emptyBadgeText: { fontSize: '12px', color: '#64748b', fontStyle: 'italic' },
+  btnActive: { backgroundColor: '#00d2ff', color: '#121212', border: 'none', padding: '12px 24px', borderRadius: '6px', cursor: 'pointer', fontWeight: '700', fontSize: '14px', transition: 'background 0.2s', marginTop: '8px', alignSelf: 'flex-start' },
+  btnDisabled: { backgroundColor: '#1e293b', color: '#64748b', border: '1px solid #334155', padding: '12px 24px', borderRadius: '6px', cursor: 'not-allowed', fontWeight: '700', fontSize: '14px', marginTop: '8px', alignSelf: 'flex-start' }
 };
 
 export default CreateTicket;

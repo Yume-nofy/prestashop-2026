@@ -12,7 +12,7 @@ const GlpiDashboard = () => {
 
   const [ticketStats, setTicketStats] = useState({
     total: 0,
-    byType: { Incident: 0, Request: 0 } // GLPI sépare principalement en Incident (1) et Demande/Request (2)
+    byType: { Incident: 0, Request: 0 }
   });
 
   useEffect(() => {
@@ -58,7 +58,7 @@ const GlpiDashboard = () => {
           if (Number(ticket.type) === 2) {
             requests++;
           } else {
-            incidents++; // Par défaut ou type 1
+            incidents++;
           }
         });
 
@@ -81,77 +81,88 @@ const GlpiDashboard = () => {
     }
   };
 
-  if (loading) return <div style={{ padding: '30px', fontFamily: 'sans-serif' }}>📊 Chargement des indicateurs du tableau de bord...</div>;
-  if (error) return <div style={{ padding: '30px', color: 'red', fontFamily: 'sans-serif' }}>⚠️ {error}</div>;
+  if (loading) {
+    return (
+      <div style={styles.loadingContainer}>
+        <div style={styles.loadingText}>Chargement des indicateurs analytiques...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={styles.errorContainer}>
+        <div style={styles.errorText}>Erreur système : {error}</div>
+      </div>
+    );
+  }
 
   const itemTypeConfig = {
-    Computer: { label: 'Ordinateurs', icon: '💻', color: '#007bff' },
-    Monitor: { label: 'Écrans', icon: '🖥️', color: '#28a745' },
-    NetworkEquipment: { label: 'Matériels Réseau', icon: '🌐', color: '#fd7e14' },
-    Peripheral: { label: 'Périphériques', icon: '🖨️', color: '#6f42c1' }
+    Computer: { label: 'Ordinateurs', color: '#00d2ff' },
+    Monitor: { label: 'Ecrans', color: '#38bdf8' },
+    NetworkEquipment: { label: 'Materiels Reseau', color: '#0ea5e9' },
+    Peripheral: { label: 'Peripheriques', color: '#0284c7' }
   };
 
   return (
-    <div style={{ padding: '30px', fontFamily: 'sans-serif', maxWidth: '1200px', margin: '0 auto', backgroundColor: '#f8f9fa', borderRadius: '12px' }}>
+    <div style={styles.page}>
       
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #dee2e6', paddingBottom: '15px', marginBottom: '30px' }}>
-        <h2 style={{ margin: 0, color: '#343a40' }}>📊 Tableau de Bord - Vue Générale du Parc</h2>
-        <button 
-          onClick={loadDashboardData} 
-          style={{ padding: '8px 16px', backgroundColor: '#fff', border: '1px solid #ced4da', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', transition: 'background 0.2s' }}
-          onMouseOver={(e) => e.target.style.backgroundColor = '#e9ecef'}
-          onMouseOut={(e) => e.target.style.backgroundColor = '#fff'}
-        >
-          🔄 Actualiser
+      {/* En-tête de page */}
+      <div style={styles.header}>
+        <div>
+          <h2 style={styles.mainTitle}>Tableau de Bord Analytique</h2>
+          <p style={styles.subtitle}>Vue generale des actifs du parc informatique et de la distribution des flux d'assistance.</p>
+        </div>
+        <button onClick={loadDashboardData} style={styles.refreshBtn}>
+          Actualiser les indicateurs
         </button>
       </div>
 
-      {/* ================= SECTION 1 : LES TOTAUX GÉNÉRAUX ================= */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '40px' }}>
+      {/* ================= SECTION 1 : LES KPI GENERAUX ================= */}
+      <div style={styles.kpiGrid}>
         
-        {/* KPI Global Éléments */}
-        <div style={{ backgroundColor: '#fff', padding: '25px', borderRadius: '10px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', borderLeft: '6px solid #007bff' }}>
-          <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#6c757d', textTransform: 'uppercase' }}>Éléments Globaux</div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
-            <span style={{ fontSize: '36px', fontWeight: 'bold', color: '#212529' }}>{itemStats.total}</span>
-            <span style={{ fontSize: '40px' }}>📦</span>
+        {/* KPI Eléments Globaux */}
+        <div style={{ ...styles.kpiCard, borderLeft: '4px solid #00d2ff' }}>
+          <div style={styles.kpiLabel}>Elements Globaux du Parc</div>
+          <div style={styles.kpiValueRow}>
+            <span style={styles.kpiNumber}>{itemStats.total}</span>
+            <span style={styles.kpiBadge}>Actifs</span>
           </div>
         </div>
 
-        {/* KPI Global Tickets */}
-        <div style={{ backgroundColor: '#fff', padding: '25px', borderRadius: '10px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', borderLeft: '6px solid #dc3545' }}>
-          <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#6c757d', textTransform: 'uppercase' }}>Tickets Totaux</div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
-            <span style={{ fontSize: '36px', fontWeight: 'bold', color: '#212529' }}>{ticketStats.total}</span>
-            <span style={{ fontSize: '40px' }}>🎫</span>
+        {/* KPI Tickets Totaux */}
+        <div style={{ ...styles.kpiCard, borderLeft: '4px solid #ef4444' }}>
+          <div style={styles.kpiLabel}>Volume Total de Tickets</div>
+          <div style={styles.kpiValueRow}>
+            <span style={styles.kpiNumber}>{ticketStats.total}</span>
+            <span style={{ ...styles.kpiBadge, color: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444' }}>Flux</span>
           </div>
         </div>
 
       </div>
 
-      {/* ================= SECTION 2 : LES DÉTAILS PAR TYPE ================= */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: '30px' }}>
+      {/* ================= SECTION 2 : REPARTITIONS ET DETAIL EN GRILLE ================= */}
+      <div style={styles.detailsGrid}>
         
-        {/* Bloc Détails du Parc */}
-        <div style={{ backgroundColor: '#fff', padding: '25px', borderRadius: '10px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-          <h3 style={{ margin: '0 0 20px 0', color: '#495057', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>📦 Répartition des Éléments</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+        {/* Bloc Repartition du Parc */}
+        <div style={styles.contentCard}>
+          <h3 style={styles.cardTitle}>Repartition Sommaire du Parc</h3>
+          <div style={styles.itemDistributionList}>
             {Object.keys(itemStats.byType).map(type => {
-              const config = itemTypeConfig[type] || { label: type, icon: '⚙️', color: '#6c757d' };
+              const config = itemTypeConfig[type] || { label: type, color: '#cbd5e1' };
               const percentage = itemStats.total > 0 ? Math.round((itemStats.byType[type] / itemStats.total) * 100) : 0;
               
               return (
-                <div key={type} style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                  <span style={{ fontSize: '24px', width: '35px', textAlign: 'center' }}>{config.icon}</span>
-                  <div style={{ flexGrow: 1 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px', fontSize: '14px', fontWeight: 'bold' }}>
-                      <span style={{ color: '#495057' }}>{config.label}</span>
-                      <span style={{ color: '#212529' }}>{itemStats.byType[type]} <span style={{ fontWeight: 'normal', color: '#868e96', fontSize: '12px' }}>({percentage}%)</span></span>
-                    </div>
-                    {/* Barre de progression personnalisée */}
-                    <div style={{ width: '100%', height: '8px', backgroundColor: '#e9ecef', borderRadius: '4px', overflow: 'hidden' }}>
-                      <div style={{ width: `${percentage}%`, height: '100%', backgroundColor: config.color, borderRadius: '4px' }} />
-                    </div>
+                <div key={type} style={styles.distributionRow}>
+                  <div style={styles.rowMetadata}>
+                    <span style={styles.rowLabel}>{config.label}</span>
+                    <span style={styles.rowValue}>
+                      {itemStats.byType[type]} <span style={styles.rowPercentage}>({percentage}%)</span>
+                    </span>
+                  </div>
+                  {/* Conteneur de barre de progression macro */}
+                  <div style={styles.progressBarBg}>
+                    <div style={{ ...styles.progressBarFill, width: `${percentage}%`, backgroundColor: config.color }} />
                   </div>
                 </div>
               );
@@ -159,33 +170,27 @@ const GlpiDashboard = () => {
           </div>
         </div>
 
-        {/* Bloc Détails des Tickets */}
-        <div style={{ backgroundColor: '#fff', padding: '25px', borderRadius: '10px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-          <h3 style={{ margin: '0 0 20px 0', color: '#495057', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>🎫 Répartition des Tickets</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', justifyContent: 'center', height: '80%' }}>
+        {/* Bloc Typologie des Tickets */}
+        <div style={styles.contentCard}>
+          <h3 style={styles.cardTitle}>Classification des Demandes</h3>
+          <div style={styles.ticketTypeContainer}>
             
-            {/* Ligne Incidents */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', backgroundColor: '#fff5f5', borderRadius: '8px', border: '1px solid #ffe3e3' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontSize: '24px' }}>⚠️</span>
-                <div>
-                  <div style={{ fontWeight: 'bold', color: '#c92a2a' }}>Incidents</div>
-                  <div style={{ fontSize: '12px', color: '#868e96' }}>Dysfonctionnements signalés</div>
-                </div>
+            {/* Carte Flux Incidents */}
+            <div style={styles.ticketRowIncident}>
+              <div style={styles.ticketMeta}>
+                <div style={styles.ticketMainLabel}>Incidents</div>
+                <div style={styles.ticketSubLabel}>Dysfonctionnements et pannes materielles</div>
               </div>
-              <span style={{ fontSize: '28px', fontWeight: 'bold', color: '#c92a2a' }}>{ticketStats.byType.Incident}</span>
+              <span style={styles.ticketCounterIncident}>{ticketStats.byType.Incident}</span>
             </div>
 
-            {/* Ligne Demandes */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', backgroundColor: '#eef6ff', borderRadius: '8px', border: '1px solid #d0ebff' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontSize: '24px' }}>🙋‍♂️</span>
-                <div>
-                  <div style={{ fontWeight: 'bold', color: '#1c7ed6' }}>Demandes de services</div>
-                  <div style={{ fontSize: '12px', color: '#868e96' }}>Besoins, accès ou installations</div>
-                </div>
+            {/* Carte Flux Demandes de Service */}
+            <div style={styles.ticketRowRequest}>
+              <div style={styles.ticketMeta}>
+                <div style={styles.ticketMainLabelRequest}>Demandes de Service</div>
+                <div style={styles.ticketSubLabel}>Besoins d'acces, dotations ou installations</div>
               </div>
-              <span style={{ fontSize: '28px', fontWeight: 'bold', color: '#1c7ed6' }}>{ticketStats.byType.Request}</span>
+              <span style={styles.ticketCounterRequest}>{ticketStats.byType.Request}</span>
             </div>
 
           </div>
@@ -195,6 +200,44 @@ const GlpiDashboard = () => {
 
     </div>
   );
+};
+
+const styles = {
+  page: { backgroundColor: '#121212', color: '#f8fafc', fontFamily: 'system-ui, -apple-system, sans-serif' },
+  loadingContainer: { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px', backgroundColor: '#121212' },
+  loadingText: { color: '#00d2ff', fontSize: '14px', fontFamily: 'monospace' },
+  errorContainer: { padding: '24px', backgroundColor: '#1e1e1e', borderRadius: '8px', border: '1px solid #ef4444' },
+  errorText: { color: '#ef4444', fontSize: '14px', margin: 0 },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '20px', borderBottom: '1px solid #334155', paddingBottom: '20px', marginBottom: '32px' },
+  mainTitle: { fontSize: '24px', fontWeight: '700', color: '#00d2ff', margin: '0 0 6px 0' },
+  subtitle: { fontSize: '13px', color: '#cbd5e1', margin: 0 },
+  refreshBtn: { backgroundColor: 'transparent', border: '1px solid #334155', color: '#00d2ff', padding: '10px 18px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', transition: 'all 0.2s' },
+  kpiGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '32px' },
+  kpiCard: { backgroundColor: '#1e1e1e', border: '1px solid #334155', borderRadius: '8px', padding: '24px' },
+  kpiLabel: { fontSize: '12px', fontWeight: '600', color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.5px' },
+  kpiValueRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: '14px' },
+  kpiNumber: { fontSize: '38px', fontWeight: '800', color: '#f8fafc' },
+  kpiBadge: { fontSize: '11px', fontWeight: '700', color: '#00d2ff', backgroundColor: 'rgba(0, 210, 255, 0.08)', border: '1px solid #00d2ff', padding: '4px 8px', borderRadius: '4px', textTransform: 'uppercase' },
+  detailsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '24px' },
+  contentCard: { backgroundColor: '#1e1e1e', border: '1px solid #334155', borderRadius: '8px', padding: '24px' },
+  cardTitle: { margin: '0 0 20px 0', fontSize: '16px', fontWeight: '700', color: '#cbd5e1', borderBottom: '1px solid #334155', paddingBottom: '12px' },
+  itemDistributionList: { display: 'flex', flexDirection: 'column', gap: '18px' },
+  distributionRow: { display: 'flex', flexDirection: 'column', gap: '8px' },
+  rowMetadata: { display: 'flex', justifycontent: 'space-between', display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: '600' },
+  rowLabel: { color: '#cbd5e1' },
+  rowValue: { color: '#f8fafc' },
+  rowPercentage: { fontWeight: '400', color: '#64748b', fontSize: '12px', marginLeft: '4px' },
+  progressBarBg: { width: '100%', height: '6px', backgroundColor: '#121212', borderRadius: '3px', overflow: 'hidden', border: '1px solid #334155' },
+  progressBarFill: { height: '100%', borderRadius: '3px' },
+  ticketTypeContainer: { display: 'flex', flexDirection: 'column', gap: '16px' },
+  ticketRowIncident: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', backgroundColor: 'rgba(239, 68, 68, 0.02)', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.2)' },
+  ticketMeta: { display: 'flex', flexDirection: 'column', gap: '4px' },
+  ticketMainLabel: { fontWeight: '700', color: '#ef4444', fontSize: '14px' },
+  ticketSubLabel: { fontSize: '12px', color: '#cbd5e1' },
+  ticketCounterIncident: { fontSize: '26px', fontWeight: '800', color: '#ef4444' },
+  ticketRowRequest: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', backgroundColor: 'rgba(0, 210, 255, 0.02)', borderRadius: '6px', border: '1px solid rgba(0, 210, 255, 0.2)' },
+  ticketMainLabelRequest: { fontWeight: '700', color: '#00d2ff', fontSize: '14px' },
+  ticketCounterRequest: { fontSize: '26px', fontWeight: '800', color: '#00d2ff' }
 };
 
 export default GlpiDashboard;
