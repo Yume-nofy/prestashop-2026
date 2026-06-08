@@ -349,7 +349,7 @@ export const createGlpiTicket = async (ticketDetails) => {
         external_id: String(ticketDetails.externalRef || "").trim()
       }
     };
-
+    console.log("external_id: "+String(ticketDetails.externalRef || "").trim());
     const response = await apiGlpi('Ticket', {
       method: 'POST',
       body: JSON.stringify(payload)

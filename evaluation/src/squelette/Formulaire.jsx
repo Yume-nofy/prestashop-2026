@@ -1,84 +1,194 @@
 import React, { useState } from 'react';
 
 const FormulaireSquelette = () => {
-  // 1. Initialisation de l'état pour les deux champs
+  // 1. Initialisation de l'état adapté pour la création d'un incident GLPI
   const [formData, setFormData] = useState({
-    nom: '',
-    email: ''
+    title: '',
+    category: 'Computer',
+    content: ''
   });
 
-  // 2. Gestion des changements dans les champs de saisie
+  // 2. Gestion dynamique et générique des changements de saisie
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({
       ...formData,
-      [name]: value // Met à jour dynamiquement le champ modifié
+      [name]: value
     });
   };
 
   // 3. Gestion de la soumission du formulaire
   const handleSubmit = (e) => {
-    e.preventDefault(); // Empêche le rechargement de la page
+    e.preventDefault();
     
-    // Traitement des données (ex: envoi à une API)
-    console.log('Données soumises :', formData);
+    // Traitement ou routage vers ton service CrudService (ex: createGlpiTicket)
+    console.log('Payload du ticket soumis à l\'API :', formData);
     
-    // Optionnel : Réinitialiser le formulaire après soumission
-    // setFormData({ nom: '', email: '' });
+    // Réinitialisation optionnelle du formulaire aux valeurs d'usine
+    // setFormData({ title: '', category: 'Computer', content: '' });
   };
 
   return (
     <div style={styles.container}>
-      <h2>Formulaire de Contact</h2>
+      <div style={styles.header}>
+        <h2 style={styles.mainTitle}>Ouverture d'un Ticket d'Assistance</h2>
+        <p style={styles.subtitle}>Déclaration immédiate d'une anomalie ou d'un besoin matériel.</p>
+      </div>
       
       <form onSubmit={handleSubmit} style={styles.form}>
-        {/* Champ 1 : Nom */}
+        {/* Champ 1 : Intitulé ou Titre de l'incident */}
         <div style={styles.inputGroup}>
-          <label htmlFor="nom" style={styles.label}>Nom :</label>
+          <label htmlFor="title" style={styles.label}>Intitulé de l'incident / Demande :</label>
           <input
             type="text"
-            id="nom"
-            name="nom"
-            value={formData.nom}
+            id="title"
+            name="title"
+            value={formData.title}
             onChange={handleChange}
-            placeholder="Votre nom"
+            placeholder="Ex: Dysfonctionnement de la carte réseau ou écran noir"
             required
             style={styles.input}
           />
         </div>
 
-        {/* Champ 2 : Email */}
+        {/* Champ 2 : Catégorie d'équipement impacté */}
         <div style={styles.inputGroup}>
-          <label htmlFor="email" style={styles.label}>Email :</label>
-          <input
-            type="email"
-            id="email"
-            name="email"
-            value={formData.email}
+          <label htmlFor="category" style={styles.label}>Catégorie de l'élément :</label>
+          <select
+            id="category"
+            name="category"
+            value={formData.category}
             onChange={handleChange}
-            placeholder="votre@email.com"
+            style={styles.select}
+          >
+            <option value="Computer">Computer (Ordinateur)</option>
+            <option value="Monitor">Monitor (Écran)</option>
+            <option value="NetworkEquipment">NetworkEquipment (Réseau)</option>
+            <option value="Peripheral">Peripheral (Périphérique)</option>
+          </select>
+        </div>
+
+        {/* Champ 3 : Description détaillée */}
+        <div style={styles.inputGroup}>
+          <label htmlFor="content" style={styles.label}>Description textuelle de l'anomalie :</label>
+          <textarea
+            id="content"
+            name="content"
+            value={formData.content}
+            onChange={handleChange}
+            placeholder="Veuillez décrire précisément les symptômes constatés, les codes d'erreur ou la référence du matériel..."
             required
-            style={styles.input}
+            rows="5"
+            style={styles.textarea}
           />
         </div>
 
-        {/* Bouton de soumission */}
+        {/* Bouton d'exécution de la requête */}
         <button type="submit" style={styles.button}>
-          Envoyer
+          Soumettre le ticket au support
         </button>
       </form>
     </div>
   );
 };
 
-// Petits styles en ligne pour rendre le squelette propre
 const styles = {
-  container: { maxWidth: '400px', margin: '20px auto', fontFamily: 'Arial, sans-serif' },
-  form: { display: 'flex', flexDirection: 'column', gap: '15px' },
-  inputGroup: { display: 'flex', flexDirection: 'column', gap: '5px' },
-  label: { fontWeight: 'bold', fontSize: '14px' },
-  input: { padding: '8px', fontSize: '16px', borderRadius: '4px', border: '1px solid #ccc' },
-  button: { padding: '10px', fontSize: '16px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }
+  container: { 
+    maxWidth: '600px', 
+    margin: '40px auto', 
+    backgroundColor: '#1e1e1e', 
+    border: '1px solid #334155', 
+    borderRadius: '8px', 
+    padding: '32px', 
+    boxSizing: 'border-box',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+    color: '#f8fafc' 
+  },
+  header: { 
+    borderBottom: '1px solid #334155', 
+    paddingBottom: '16px', 
+    marginBottom: '24px' 
+  },
+  mainTitle: { 
+    fontSize: '20px', 
+    fontWeight: '700', 
+    color: '#00d2ff', 
+    margin: '0 0 6px 0' 
+  },
+  subtitle: { 
+    fontSize: '13px', 
+    color: '#cbd5e1', 
+    margin: 0 
+  },
+  form: { 
+    display: 'flex', 
+    flexDirection: 'column', 
+    gap: '20px' 
+  },
+  inputGroup: { 
+    display: 'flex', 
+    flexDirection: 'column', 
+    gap: '8px' 
+  },
+  label: { 
+    fontSize: '12px', 
+    fontWeight: '600', 
+    color: '#cbd5e1', 
+    textTransform: 'uppercase', 
+    letterSpacing: '0.5px' 
+  },
+  input: { 
+    width: '100%', 
+    padding: '12px', 
+    fontSize: '14px', 
+    backgroundColor: '#121212', 
+    border: '1px solid #334155', 
+    borderRadius: '6px', 
+    color: '#f8fafc', 
+    boxSizing: 'border-box', 
+    outline: 'none', 
+    transition: 'border-color 0.2s' 
+  },
+  select: { 
+    width: '100%', 
+    padding: '12px', 
+    fontSize: '14px', 
+    backgroundColor: '#121212', 
+    border: '1px solid #334155', 
+    borderRadius: '6px', 
+    color: '#f8fafc', 
+    boxSizing: 'border-box', 
+    outline: 'none' 
+  },
+  textarea: { 
+    width: '100%', 
+    padding: '12px', 
+    fontSize: '14px', 
+    backgroundColor: '#121212', 
+    border: '1px solid #334155', 
+    borderRadius: '6px', 
+    color: '#f8fafc', 
+    boxSizing: 'border-box', 
+    outline: 'none', 
+    resize: 'vertical', 
+    lineHeight: '1.5',
+    fontFamily: 'inherit'
+  },
+  button: { 
+    width: '100%', 
+    padding: '14px', 
+    fontSize: '13px', 
+    fontWeight: '700', 
+    backgroundColor: '#00d2ff', 
+    color: '#121212', 
+    border: 'none', 
+    borderRadius: '6px', 
+    cursor: 'pointer', 
+    transition: 'background 0.2s', 
+    textTransform: 'uppercase', 
+    letterSpacing: '0.5px',
+    marginTop: '8px'
+  }
 };
 
 export default FormulaireSquelette;

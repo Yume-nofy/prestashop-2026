@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchGlpiItems, fetchGlpiDocumentItems, fetchGlpiDocumentImage } from '../services/CrudService';
 import { apiGlpi } from '../api/apiGlpi';
+import AdminLayout from './AdminLayout'; 
 
 const GlpiItemList = () => {
   const [items, setItems] = useState([]);
@@ -18,6 +19,9 @@ const GlpiItemList = () => {
   const [statusesList, setStatusesList] = useState([]);
   const [manufacturersList, setManufacturersList] = useState([]);
 
+  // Vérification de la session pour savoir s'il faut inclure le Layout admin
+  const isAdmin = localStorage.getItem('adminSession') === 'admin';
+
   useEffect(() => {
     loadAllData();
   }, []);
@@ -26,7 +30,6 @@ const GlpiItemList = () => {
     setLoading(true);
     setError(null);
     try {
-      // 1. Récupération des Référentiels (Fabricants & Statuts) en parallèle
       let manufacturerMap = {};
       let statusMap = {};
 
@@ -36,11 +39,9 @@ const GlpiItemList = () => {
           apiGlpi('State').catch(() => [])
         ]);
 
-        // Construction du dictionnaire des Fabricants (ID -> Nom)
         if (Array.isArray(manufacturersData)) {
           manufacturersData.forEach(m => { manufacturerMap[m.id] = m.name; });
         }
-        // Construction du dictionnaire des Statuts (ID -> Nom)
         if (Array.isArray(statusesData)) {
           statusesData.forEach(s => { statusMap[s.id] = s.name; });
         }
@@ -48,7 +49,6 @@ const GlpiItemList = () => {
         console.warn("Erreur lors du chargement des dictionnaires GLPI :", e);
       }
 
-      // 2. Récupération en parallèle des équipements du parc
       const typesToFetch = ['Computer', 'Monitor', 'NetworkEquipment', 'Peripheral']; 
       const itemsPromises = typesToFetch.map(async (type) => {
         try {
@@ -63,7 +63,6 @@ const GlpiItemList = () => {
       const allItemsResults = await Promise.all(itemsPromises);
       let combinedItems = allItemsResults.flat();
 
-      // 3. Récupération des liaisons Documents <-> Items pour les images
       let docItemsMap = {};
       try {
         const docItems = await fetchGlpiDocumentItems();
@@ -77,13 +76,12 @@ const GlpiItemList = () => {
         console.warn("Impossible de charger les liaisons d'images :", e);
       }
 
-      // 4. Structuration finale (Liaison Fabricant textuel + Statut textuel + Image)
       combinedItems = combinedItems.map(item => {
         const key = `${item.itemtype}-${item.id}`;
         return {
           ...item,
           manufacturerName: manufacturerMap[item.manufacturers_id] || "Inconnu",
-          statusName: statusMap[item.states_id] || "Par défaut", // Traduction de states_id en texte
+          statusName: statusMap[item.states_id] || "Par defaut",
           documentId: docItemsMap[key] || null,
           imageUrl: null 
         };
@@ -91,14 +89,12 @@ const GlpiItemList = () => {
 
       setItems(combinedItems);
 
-      // 5. Extraction dynamique des listes de filtres textuels uniques
       const uniqueStatuses = [...new Set(combinedItems.map(i => i.statusName))];
       const uniqueManufacturers = [...new Set(combinedItems.map(i => i.manufacturerName))];
       
       setStatusesList(uniqueStatuses);
       setManufacturersList(uniqueManufacturers);
 
-      // 6. Chargement asynchrone des images binaires (Blob URLs)
       combinedItems.forEach(async (item) => {
         if (item.documentId) {
           const blobUrl = await fetchGlpiDocumentImage(item.documentId);
@@ -122,7 +118,6 @@ const GlpiItemList = () => {
     }
   };
 
-  // 🎛️ Logique de filtrage multi-critères cumulatif
   const filteredItems = items.filter(item => {
     const matchesSearch = searchQuery === '' || 
       (item.name && item.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -130,176 +125,168 @@ const GlpiItemList = () => {
       (item.serial && item.serial.toLowerCase().includes(searchQuery.toLowerCase()));
 
     const matchesType = selectedType === '' || item.itemtype === selectedType;
-    
-    // Filtrage basé sur les valeurs textuelles de statut et de fabricant
     const matchesStatus = selectedStatus === '' || item.statusName === selectedStatus;
     const matchesManufacturer = selectedManufacturer === '' || item.manufacturerName === selectedManufacturer;
 
     return matchesSearch && matchesType && matchesStatus && matchesManufacturer;
   });
 
-  if (loading) return <div style={{ padding: '20px' }}>🔄 Chargement des équipements du parc GLPI...</div>;
-  if (error) return <div style={{ padding: '20px', color: 'red' }}>⚠️ {error}</div>;
+  if (loading) {
+    return (
+      <div style={styles.loadingContainer}>
+        <div style={styles.loadingText}>Indexation et resolution du parc GLPI...</div>
+      </div>
+    );
+  }
 
-  return (
-    <div style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '1200px', margin: '0 auto' }}>
-      <h2 style={{ borderBottom: '2px solid #007bff', paddingBottom: '10px' }}>FrontOffice - Liste des Éléments du Parc</h2>
+  if (error) {
+    return (
+      <div style={styles.errorContainer}>
+        <div style={styles.errorText}>Erreur systeme : {error}</div>
+      </div>
+    );
+  }
 
-      {/* 🔍 BARRE DE RECHERCHE MULTI-CRITÈRES */}
-      <div style={{ 
-        backgroundColor: '#f8f9fa', 
-        padding: '20px', 
-        borderRadius: '8px', 
-        marginBottom: '25px',
-        border: '1px solid #e9ecef',
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: '15px'
-      }}>
-        {/* Critère 1 : Recherche globale */}
-        <div>
-          <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px', fontSize: '14px' }}>Recherche globale</label>
+  // Contenu principal de la liste
+  const renderContent = () => (
+    <div style={styles.pageContent}>
+      <div style={styles.header}>
+        <h2 style={styles.mainTitle}>Inventaire du Parc Informatique</h2>
+        <p style={styles.subtitle}>Index global triable, recherche multicriteres et statut en temps reel.</p>
+      </div>
+
+      {/* 🔍 FILTRES DE RECHERCHE */}
+      <div style={styles.filterSection}>
+        <div style={styles.filterGroup}>
+          <label style={styles.filterLabel}>Recherche globale</label>
           <input 
             type="text" 
-            placeholder="Nom, n° inventaire, série..." 
+            placeholder="Nom, num inventaire, serie..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+            style={styles.input}
           />
         </div>
 
-        {/* Critère 2 : Type */}
-        <div>
-          <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px', fontSize: '14px' }}>Type d'élément</label>
-          <select 
-            value={selectedType} 
-            onChange={(e) => setSelectedType(e.target.value)}
-            style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', backgroundColor: '#fff' }}
-          >
-            <option value="">Tous les types</option>
+        <div style={styles.filterGroup}>
+          <label style={styles.filterLabel}>Categorie</label>
+          <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)} style={styles.select}>
+            <option value="">Toutes les categories</option>
             {typesList.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
 
-        {/* Critère 3 : Statut (Nom textuel propre) */}
-        <div>
-          <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px', fontSize: '14px' }}>Statut</label>
-          <select 
-            value={selectedStatus} 
-            onChange={(e) => setSelectedStatus(e.target.value)}
-            style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', backgroundColor: '#fff' }}
-          >
+        <div style={styles.filterGroup}>
+          <label style={styles.filterLabel}>Statut operationnel</label>
+          <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} style={styles.select}>
             <option value="">Tous les statuts</option>
             {statusesList.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
 
-        {/* Critère 4 : Fabricant (Nom textuel propre) */}
-        <div>
-          <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px', fontSize: '14px' }}>Fabricant</label>
-          <select 
-            value={selectedManufacturer} 
-            onChange={(e) => setSelectedManufacturer(e.target.value)}
-            style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', backgroundColor: '#fff' }}
-          >
+        <div style={styles.filterGroup}>
+          <label style={styles.filterLabel}>Constructeur</label>
+          <select value={selectedManufacturer} onChange={(e) => setSelectedManufacturer(e.target.value)} style={styles.select}>
             <option value="">Tous les fabricants</option>
             {manufacturersList.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
         </div>
       </div>
 
-      {/* COMPTEUR */}
-      <p style={{ fontWeight: 'bold', color: '#555' }}>
-        🔍 {filteredItems.length} élément(s) trouvé(s) sur un total de {items.length} dans le parc.
-      </p>
+      {/* COMPTEUR METRIQUE */}
+      <div style={styles.metaCounter}>
+        Filtre actif : {filteredItems.length} element(s) liste(s) sur un total de {items.length} actifs enregistres.
+      </div>
 
-      {/* 🎴 GRILLE D'AFFICHAGE */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
-        gap: '20px',
-        marginTop: '15px' 
-      }}>
+      {/* 🎴 GRILLE DES CARTES ACTIFS */}
+      <div style={styles.grid}>
         {filteredItems.map((item, index) => (
-          <div 
-            key={`${item.itemtype || 'item'}-${item.id || index}-${index}`} 
-            style={{ 
-              border: '1px solid #e0e0e0', 
-              borderRadius: '8px', 
-              overflow: 'hidden', 
-              backgroundColor: '#fff',
-              boxShadow: '0 2px 5px rgba(0,0,0,0.05)',
-              display: 'flex',
-              flexDirection: 'column'
-            }}
-          >
-            {/* ZONE IMAGE */}
-            <div style={{ 
-              height: '160px', 
-              backgroundColor: '#f1f3f5', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              borderBottom: '1px solid #e0e0e0',
-              overflow: 'hidden'
-            }}>
+          <div key={`${item.itemtype || 'item'}-${item.id || index}-${index}`} style={styles.card}>
+            
+            {/* ZONE IMAGE BLOB / COUVERTURE */}
+            <div style={styles.imageContainer}>
               {item.imageUrl ? (
                 <img 
                   src={item.imageUrl} 
                   alt={item.name} 
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  style={styles.image}
                   onError={(e) => {
                     e.target.onerror = null; 
-                    e.target.src = "https://placehold.co/280x160?text=Image+Indisponible";
+                    e.target.src = "https://placehold.co/280x160/1e1e1e/64748b?text=Image+Indisponible";
                   }}
                 />
               ) : (
-                <div style={{ color: '#adb5bd', fontSize: '13px', textAlign: 'center', padding: '10px' }}>
-                  📷 <br /> Aucune image disponible
-                </div>
+                <div style={styles.noImageText}>Aucun rendu visuel</div>
               )}
             </div>
 
-            {/* CONTENU CARD */}
-            <div style={{ padding: '15px', flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            {/* DESCRIPTION DU MATERIEL */}
+            <div style={styles.cardBody}>
               <div>
-                <span style={{ 
-                  fontSize: '11px', 
-                  textTransform: 'uppercase', 
-                  backgroundColor: '#e7f5ff', 
-                  color: '#007bff', 
-                  padding: '3px 8px', 
-                  borderRadius: '12px', 
-                  fontWeight: 'bold' 
-                }}>
-                  {item.itemtype}
-                </span>
-                
-                <h4 style={{ margin: '10px 0 5px 0', color: '#212529', fontSize: '16px' }}>{item.name || "Élément sans nom"}</h4>
-                
-                <p style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#6c757d' }}>
-                  <strong>N° Inventaire :</strong> {item.inventoryNumber || item.otherserial || '—'}
-                </p>
+                <span style={styles.typeBadge}>{item.itemtype}</span>
+                <h4 style={styles.itemTitle}>{item.name || "Actif sans label"}</h4>
+                <div style={styles.inventoryLine}>
+                  <span style={styles.metaLabel}>N° Inventaire :</span> {item.inventoryNumber || item.otherserial || '—'}
+                </div>
               </div>
 
-              <div style={{ borderTop: '1px dashed #eee', paddingTop: '10px', marginTop: 'auto', fontSize: '12px', color: '#495057' }}>
-                {/* 🟢 AFFICHAGE DU TEXTE DU STATUT ICI */}
-                <div style={{ marginBottom: '4px' }}>🟢 <strong>Statut :</strong> {item.statusName}</div>
-                {/* 🏢 AFFICHAGE DU TEXTE DU FABRICANT ICI */}
-                <div>🏢 <strong>Fabricant :</strong> {item.manufacturerName}</div>
+              <div style={styles.cardFooter}>
+                <div style={styles.footerLine}>
+                  <span style={styles.statusDot}></span>
+                  <span style={styles.metaLabel}>Statut :</span> {item.statusName}
+                </div>
+                <div style={styles.footerLine}>
+                  <span style={styles.metaLabel}>Fabricant :</span> {item.manufacturerName}
+                </div>
               </div>
             </div>
+
           </div>
         ))}
       </div>
 
       {filteredItems.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d', border: '1px dashed #ccc', borderRadius: '8px', marginTop: '20px' }}>
-          Aucun équipement ne correspond à vos critères de recherche.
+        <div style={styles.emptyContainer}>
+          Aucun element du parc informatique ne correspond aux criteres de filtrage selectionnes.
         </div>
       )}
     </div>
   );
+
+  // Condition d'affichage : si connecté en admin, on encapsule dans le Layout, sinon affichage brut complet
+  return isAdmin ? <AdminLayout>{renderContent()}</AdminLayout> : <div style={styles.standalonePage}>{renderContent()}</div>;
+};
+
+const styles = {
+  loadingContainer: { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#121212' },
+  loadingText: { color: '#00d2ff', fontSize: '14px', fontFamily: 'monospace' },
+  errorContainer: { padding: '24px', backgroundColor: '#1e1e1e', border: '1px solid #ef4444', margin: '40px' },
+  errorText: { color: '#ef4444', fontSize: '14px', margin: 0 },
+  standalonePage: { backgroundColor: '#121212', minHeight: '100vh', padding: '40px', boxSizing: 'border-box', color: '#f8fafc', fontFamily: 'system-ui, -apple-system, sans-serif' },
+  pageContent: { width: '100%' },
+  header: { borderBottom: '1px solid #334155', paddingBottom: '16px', marginBottom: '24px' },
+  mainTitle: { fontSize: '22px', fontWeight: '700', color: '#00d2ff', margin: '0 0 6px 0' },
+  subtitle: { fontSize: '13px', color: '#cbd5e1', margin: 0 },
+  filterSection: { backgroundColor: '#1e1e1e', border: '1px solid #334155', padding: '20px', borderRadius: '8px', marginBottom: '24px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' },
+  filterGroup: { display: 'flex', flexDirection: 'column', gap: '6px' },
+  filterLabel: { fontSize: '12px', fontWeight: '600', color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.5px' },
+  input: { width: '100%', padding: '10px 12px', backgroundColor: '#121212', border: '1px solid #334155', borderRadius: '6px', color: '#f8fafc', fontSize: '13px', boxSizing: 'border-box', outline: 'none' },
+  select: { width: '100%', padding: '10px 12px', backgroundColor: '#121212', border: '1px solid #334155', borderRadius: '6px', color: '#f8fafc', fontSize: '13px', boxSizing: 'border-box', outline: 'none' },
+  metaCounter: { fontSize: '13px', color: '#cbd5e1', fontWeight: '500', marginBottom: '16px' },
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '24px' },
+  card: { backgroundColor: '#1e1e1e', border: '1px solid #334155', borderRadius: '8px', overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%' },
+  imageContainer: { height: '150px', backgroundColor: '#121212', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  image: { width: '100%', height: '100%', objectFit: 'cover' },
+  noImageText: { color: '#64748b', fontSize: '12px', textTransform: 'uppercase', fontFamily: 'monospace' },
+  cardBody: { padding: '18px', flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '16px' },
+  typeBadge: { fontSize: '10px', fontWeight: '700', color: '#00d2ff', backgroundColor: 'rgba(0, 210, 255, 0.08)', border: '1px solid #00d2ff', padding: '3px 8px', borderRadius: '4px', textTransform: 'uppercase', display: 'inline-block' },
+  itemTitle: { margin: '8px 0 4px 0', color: '#f8fafc', fontSize: '15px', fontWeight: '700' },
+  inventoryLine: { fontSize: '12px', color: '#cbd5e1' },
+  metaLabel: { color: '#64748b', fontWeight: '600' },
+  cardFooter: { borderTop: '1px solid #334155', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px' },
+  footerLine: { display: 'flex', alignItems: 'center', gap: '6px', color: '#cbd5e1' },
+  statusDot: { width: '6px', height: '6px', backgroundColor: '#10b981', borderRadius: '50%' },
+  emptyContainer: { textAlign: 'center', padding: '40px', color: '#64748b', border: '1px dashed #334155', borderRadius: '8px', marginTop: '24px', fontSize: '13px' }
 };
 
 export default GlpiItemList;
