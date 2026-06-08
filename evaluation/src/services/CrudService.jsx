@@ -346,9 +346,10 @@ export const createGlpiTicket = async (ticketDetails) => {
         status: statuses[csvStatus] || 1,     
         date: ticketDetails.fullDateTime,
         actiontime: ticketDetails.duration || 0,
-        external_id: String(ticketDetails.externalRef || "").trim()
+        externalid: String(ticketDetails.externalRef || "").trim()
       }
     };
+    console.log("json:",payload);
     console.log("external_id: "+String(ticketDetails.externalRef || "").trim());
     const response = await apiGlpi('Ticket', {
       method: 'POST',

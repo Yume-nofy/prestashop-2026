@@ -265,7 +265,7 @@ const CsvDynamicTester = () => {
             });
 
             const newTicketId = ticketRes.id;
-            await updateTicketExternalId(newTicketId, csvRef);
+            // await updateTicketExternalId(newTicketId, csvRef);
             
             if (newTicketId) {
               addLog(`Ticket #${newTicketId} créé (Ref CSV: ${csvRef}) | Durée Globale: ${totalDurationSeconds}s`);
