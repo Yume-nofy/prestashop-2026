@@ -5,6 +5,7 @@ import { apiGlpi } from '../api/apiGlpi';
 const CreateTicket = () => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [type, setType] = useState('1'); // 1: Incident, 2: Demande
   const [urgency, setUrgency] = useState('3'); 
 
   const [availableItems, setAvailableItems] = useState([]);
@@ -82,6 +83,7 @@ const CreateTicket = () => {
           input: {
             name: title.trim(),
             content: cleanContent,
+            type: parseInt(type, 10),
             urgency: parseInt(urgency, 10)
           }
         })
@@ -111,6 +113,7 @@ const CreateTicket = () => {
       
       setTitle('');
       setContent('');
+      setType('1');
       setUrgency('3');
       setSelectedItems([]);
 
@@ -124,9 +127,11 @@ const CreateTicket = () => {
 
   return (
     <div style={styles.page}>
+      
+      {/* En-tête de page */}
       <div style={styles.header}>
-        <h2 style={styles.mainTitle}>Ouverture d'un Incident</h2>
-        <p style={styles.subtitle}>Enregistrez une nouvelle declaration d'anomalie dans le systeme de centralisation GLPI.</p>
+        <h2 style={styles.mainTitle}>Ouverture d'un Ticket d'Assistance</h2>
+        <p style={styles.subtitle}>Enregistrez une nouvelle declaration dans le systeme de centralisation GLPI.</p>
       </div>
 
       {message.text && (
@@ -135,97 +140,127 @@ const CreateTicket = () => {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} style={styles.form}>
+      {/* Structure Grid à deux colonnes */}
+      <form onSubmit={handleSubmit} style={styles.layoutGrid}>
         
-        {/* Titre */}
-        <div style={styles.formGroup}>
-          <label style={styles.label}>Intitule de l'incident</label>
-          <input 
-            type="text"
-            placeholder="Ex: Defaillance d'affichage ou rupture de liaison reseau"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            style={styles.input}
-          />
-        </div>
+        {/* Colonne de gauche : Informations principales du Ticket */}
+        <div style={styles.leftColumn}>
+          <div style={styles.cardForm}>
+            
+            {/* Titre */}
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Intitule du ticket</label>
+              <input 
+                type="text"
+                placeholder="Ex: Defaillance d'affichage ou rupture de liaison reseau"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                style={styles.input}
+              />
+            </div>
 
-        {/* Urgence */}
-        <div style={styles.formGroup}>
-          <label style={styles.label}>Niveau d'urgence declare</label>
-          <select 
-            value={urgency}
-            onChange={(e) => setUrgency(e.target.value)}
-            style={styles.select}
-          >
-            <option value="5">5 - Tres haute</option>
-            <option value="4">4 - Haute</option>
-            <option value="3">3 - Moyenne</option>
-            <option value="2">2 - Basse</option>
-            <option value="1">1 - Tres basse</option>
-          </select>
-        </div>
-
-        {/* Description */}
-        <div style={styles.formGroup}>
-          <label style={styles.label}>Description detaillee des symptomes</label>
-          <textarea 
-            rows="5"
-            placeholder="Saisissez les precisions techniques concernant le dysfonctionnement..."
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            style={styles.textarea}
-          />
-        </div>
-
-        {/* Association de materiels */}
-        <div style={styles.parcSection}>
-          <label style={styles.parcTitle}>Liaison d'equipements du parc (Optionnel)</label>
-          
-          {loadingParc ? (
-            <p style={styles.loadingText}>Indexation des elements du parc en cours...</p>
-          ) : (
-            <select 
-              onChange={handleAddItem}
-              defaultValue=""
-              style={styles.select}
-            >
-              <option value="" disabled>-- Selectionner un equipement a lier --</option>
-              {availableItems.map(item => (
-                <option key={`${item.itemtype}-${item.id}`} value={`${item.itemtype}-${item.id}`}>
-                  [{item.itemtype}] {item.name} {item.serial && `(S/N: ${item.serial})`}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {/* Liste des badges d'association */}
-          <div style={styles.badgeContainer}>
-            {selectedItems.map(item => (
-              <span key={`${item.itemtype}-${item.id}`} style={styles.badge}>
-                <strong style={styles.badgeType}>{item.itemtype}:</strong> {item.name}
-                <button 
-                  type="button"
-                  onClick={() => handleRemoveItem(item.itemtype, item.id)}
-                  style={styles.badgeRemoveBtn}
+            {/* Type et Urgence côte à côte */}
+            <div style={styles.rowGroup}>
+              <div style={{ ...styles.formGroup, flex: 1 }}>
+                <label style={styles.label}>Type de ticket</label>
+                <select 
+                  value={type}
+                  onChange={(e) => setType(e.target.value)}
+                  style={styles.select}
                 >
-                  &times;
-                </button>
-              </span>
-            ))}
-            {selectedItems.length === 0 && (
-              <span style={styles.emptyBadgeText}>Aucune liaison active pour ce ticket.</span>
-            )}
+                  <option value="1">Incident (Dysfonctionnement)</option>
+                  <option value="2">Demande (Service / Nouveau besoin)</option>
+                </select>
+              </div>
+
+              <div style={{ ...styles.formGroup, flex: 1 }}>
+                <label style={styles.label}>Niveau d'urgence declare</label>
+                <select 
+                  value={urgency}
+                  onChange={(e) => setUrgency(e.target.value)}
+                  style={styles.select}
+                >
+                  <option value="5">5 - Tres haute</option>
+                  <option value="4">4 - Haute</option>
+                  <option value="3">3 - Moyenne</option>
+                  <option value="2">2 - Basse</option>
+                  <option value="1">1 - Tres basse</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Description */}
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Description detaillee des symptomes</label>
+              <textarea 
+                rows="8"
+                placeholder="Saisissez les precisions techniques concernant le dysfonctionnement ou la requete..."
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                style={styles.textarea}
+              />
+            </div>
+
+            {/* Bouton de validation */}
+            <button 
+              type="submit"
+              disabled={loading}
+              style={loading ? styles.btnDisabled : styles.btnActive}
+            >
+              {loading ? 'Enregistrement en cours...' : 'Valider et creer le ticket'}
+            </button>
+
           </div>
         </div>
 
-        {/* Bouton de validation */}
-        <button 
-          type="submit"
-          disabled={loading}
-          style={loading ? styles.btnDisabled : styles.btnActive}
-        >
-          {loading ? 'Enregistrement du ticket...' : 'Valider et creer le ticket'}
-        </button>
+        {/* Colonne de droite : Association d'équipements */}
+        <div style={styles.rightColumn}>
+          <div style={styles.parcSection}>
+            <span style={styles.parcMetaTag}>Inventaire IT</span>
+            <label style={styles.parcTitle}>Liaison d'equipements du parc (Optionnel)</label>
+            <p style={styles.parcSubtitle}>Associez un ou plusieurs composants de l'infrastructure impactes par ce ticket.</p>
+            
+            {loadingParc ? (
+              <p style={styles.loadingText}>Indexation des elements du parc en cours...</p>
+            ) : (
+              <select 
+                onChange={handleAddItem}
+                defaultValue=""
+                style={styles.select}
+              >
+                <option value="" disabled>-- Selectionner un equipement a lier --</option>
+                {availableItems.map(item => (
+                  <option key={`${item.itemtype}-${item.id}`} value={`${item.itemtype}-${item.id}`}>
+                    [{item.itemtype}] {item.name} {item.serial && `(S/N: ${item.serial})`}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {/* Liste des badges d'association */}
+            <div style={styles.badgeContainer}>
+              {selectedItems.map(item => (
+                <span key={`${item.itemtype}-${item.id}`} style={styles.badge}>
+                  <span style={styles.badgeText}>
+                    <strong style={styles.badgeType}>{item.itemtype}:</strong> {item.name}
+                  </span>
+                  <button 
+                    type="button"
+                    onClick={() => handleRemoveItem(item.itemtype, item.id)}
+                    style={styles.badgeRemoveBtn}
+                  >
+                    &times;
+                  </button>
+                </span>
+              ))}
+              {selectedItems.length === 0 && (
+                <div style={styles.emptyBadgeBox}>
+                  Aucune liaison active. Ce ticket sera declare comme non associe a un materiel specifique.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
 
       </form>
     </div>
@@ -233,28 +268,47 @@ const CreateTicket = () => {
 };
 
 const styles = {
-  page: { backgroundColor: '#121212', color: '#f8fafc', fontFamily: 'system-ui, -apple-system, sans-serif' },
+  page: { backgroundColor: '#121212', minHeight: '100vh', color: '#f8fafc', fontFamily: 'system-ui, -apple-system, sans-serif', padding: '20px' },
   header: { borderBottom: '1px solid #334155', paddingBottom: '16px', marginBottom: '24px' },
   mainTitle: { fontSize: '22px', fontWeight: '700', color: '#00d2ff', margin: '0 0 6px 0' },
   subtitle: { fontSize: '13px', color: '#cbd5e1', margin: 0 },
   alertSuccess: { padding: '12px 16px', borderRadius: '6px', marginBottom: '20px', fontSize: '13px', fontWeight: '600', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid #10b981', color: '#10b981' },
   alertError: { padding: '12px 16px', borderRadius: '6px', marginBottom: '20px', fontSize: '13px', fontWeight: '600', backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444' },
-  form: { display: 'flex', flexDirection: 'column', gap: '20px' },
+  
+  // Nouveau Layout Grid Propre
+  layoutGrid: { display: 'flex', width: '100%', gap: '24px', alignItems: 'flex-start' },
+  leftColumn: { width: '55%', flexShrink: 0 },
+  rightColumn: { width: '45%', flexGrow: 1, position: 'sticky', top: '20px' },
+  
+  // Conteneurs de cartes
+  cardForm: { backgroundColor: '#1e1e1e', border: '1px solid #334155', borderRadius: '8px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' },
   formGroup: { display: 'flex', flexDirection: 'column', gap: '6px' },
-  label: { fontSize: '13px', fontWeight: '600', color: '#cbd5e1' },
-  input: { width: '100%', padding: '10px 12px', backgroundColor: '#1e1e1e', border: '1px solid #334155', borderRadius: '6px', color: '#f8fafc', fontSize: '13px', boxSizing: 'border-box' },
-  select: { width: '100%', padding: '10px 12px', backgroundColor: '#1e1e1e', border: '1px solid #334155', borderRadius: '6px', color: '#f8fafc', fontSize: '13px', boxSizing: 'border-box' },
-  textarea: { width: '100%', padding: '10px 12px', backgroundColor: '#1e1e1e', border: '1px solid #334155', borderRadius: '6px', color: '#f8fafc', fontSize: '13px', boxSizing: 'border-box', fontFamily: 'inherit', resize: 'vertical' },
-  parcSection: { backgroundColor: '#1e1e1e', border: '1px solid #334155', padding: '20px', borderRadius: '8px' },
-  parcTitle: { display: 'block', fontSize: '13px', fontWeight: '700', color: '#00d2ff', marginBottom: '12px' },
+  rowGroup: { display: 'flex', gap: '16px' },
+  label: { fontSize: '12px', fontWeight: '700', color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.5px' },
+  
+  // Inputs
+  input: { width: '100%', padding: '10px 12px', backgroundColor: '#121212', border: '1px solid #334155', borderRadius: '6px', color: '#f8fafc', fontSize: '13px', boxSizing: 'border-box' },
+  select: { width: '100%', padding: '10px 12px', backgroundColor: '#121212', border: '1px solid #334155', borderRadius: '6px', color: '#f8fafc', fontSize: '13px', boxSizing: 'border-box' },
+  textarea: { width: '100%', padding: '10px 12px', backgroundColor: '#121212', border: '1px solid #334155', borderRadius: '6px', color: '#f8fafc', fontSize: '13px', boxSizing: 'border-box', fontFamily: 'inherit', resize: 'vertical' },
+  
+  // Section Parc de droite
+  parcSection: { backgroundColor: '#1e1e1e', border: '1px solid #334155', padding: '24px', borderRadius: '8px' },
+  parcMetaTag: { fontSize: '11px', fontWeight: '700', color: '#00d2ff', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '4px' },
+  parcTitle: { display: 'block', fontSize: '16px', fontWeight: '700', color: '#f8fafc', marginBottom: '4px' },
+  parcSubtitle: { fontSize: '12px', color: '#94a3b8', margin: '0 0 16px 0' },
   loadingText: { fontSize: '12px', color: '#64748b', margin: 0, fontFamily: 'monospace' },
-  badgeContainer: { display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '14px' },
-  badge: { backgroundColor: '#121212', color: '#cbd5e1', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '10px', border: '1px solid #334155' },
-  badgeType: { color: '#00d2ff' },
-  badgeRemoveBtn: { border: 'none', background: 'none', color: '#ef4444', fontWeight: '700', cursor: 'pointer', fontSize: '14px', padding: 0 },
-  emptyBadgeText: { fontSize: '12px', color: '#64748b', fontStyle: 'italic' },
-  btnActive: { backgroundColor: '#00d2ff', color: '#121212', border: 'none', padding: '12px 24px', borderRadius: '6px', cursor: 'pointer', fontWeight: '700', fontSize: '14px', transition: 'background 0.2s', marginTop: '8px', alignSelf: 'flex-start' },
-  btnDisabled: { backgroundColor: '#1e293b', color: '#64748b', border: '1px solid #334155', padding: '12px 24px', borderRadius: '6px', cursor: 'not-allowed', fontWeight: '700', fontSize: '14px', marginTop: '8px', alignSelf: 'flex-start' }
+  
+  // Badges d'infrastructure
+  badgeContainer: { display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' },
+  badge: { backgroundColor: '#121212', padding: '10px 14px', borderRadius: '6px', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid #334155' },
+  badgeText: { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '85%' },
+  badgeType: { color: '#00d2ff', fontWeight: '600' },
+  badgeRemoveBtn: { border: 'none', background: 'none', color: '#ef4444', fontWeight: '700', cursor: 'pointer', fontSize: '18px', padding: '0 4px', lineHeight: 1 },
+  emptyBadgeBox: { fontSize: '12px', color: '#64748b', fontStyle: 'italic', border: '1px dashed #334155', padding: '16px', borderRadius: '6px', textAlign: 'center', backgroundColor: '#121212' },
+  
+  // Boutons d'action
+  btnActive: { width: '100%', backgroundColor: '#00d2ff', color: '#121212', border: 'none', padding: '12px 24px', borderRadius: '6px', cursor: 'pointer', fontWeight: '700', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px', transition: 'background 0.2s', marginTop: '4px' },
+  btnDisabled: { width: '100%', backgroundColor: '#1e293b', color: '#64748b', border: '1px solid #334155', padding: '12px 24px', borderRadius: '6px', cursor: 'not-allowed', fontWeight: '700', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '4px' }
 };
 
 export default CreateTicket;
