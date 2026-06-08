@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useCsvParser, useTicketCsvParser } from '../services/ParserCsv'; 
+import { useCsvParser, useTicketCsvParser, useCostCsvParser } from '../services/ParserCsv'; 
 import JSZip from 'jszip';
 import {  
   createGlpiGroup, 
@@ -10,7 +10,8 @@ import {
   createGlpiTicket,  
   linkItemToTicket,
   addUserProfileAndEntity,
-  addGlpiTicketCost, updateTicketExternalId,
+  addGlpiTicketCost, 
+  updateTicketExternalId,
   uploadGlpiDocument, 
   linkDocumentToItem
 } from '../services/CrudService';
@@ -19,8 +20,9 @@ import { getGlpiUserId, createGlpiUser, linkUserToGroup } from '../services/test
 const CsvDynamicTester = () => {
   const { data: devicesData, parseFile: parseDevicesFile } = useCsvParser({ separator: ',' });
   const { ticketData, parseTicketFile } = useTicketCsvParser({ separator: ',' });
+  const { costData, parseCostFile } = useCostCsvParser({ separator: ',' });
+  
   const [zipFile, setZipFile] = useState(null);
-  const [costsData, setCostsData] = useState([]);
   const [importing, setImporting] = useState(false);
   const [logs, setLogs] = useState([]);
 
@@ -45,24 +47,8 @@ const CsvDynamicTester = () => {
   const handleCostsUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const text = event.target.result;
-        const rows = text.split('\n').map(row => row.split(','));
-        const headers = rows[0].map(h => h.trim());
-        
-        const parsed = rows.slice(1)
-          .filter(row => row.length === headers.length)
-          .map(row => {
-            const obj = {};
-            headers.forEach((h, i) => obj[h] = row[i] ? row[i].trim() : "");
-            return obj;
-          });
-        
-        setCostsData(parsed);
-        addLog(`Fichier Coûts & Durées chargé : ${file.name}`);
-      };
-      reader.readAsText(file);
+      parseCostFile(file); // Utilisation directe du parser normalisé
+      addLog(`Fichier Coûts & Durées chargé et corrigé : ${file.name}`);
     }
   };
 
@@ -234,31 +220,24 @@ const CsvDynamicTester = () => {
       }
 
       if (ticketData && ticketData.length > 0) {
-        addLog(`Traitement de ${ticketData.length} ticket(s) avec analyse des coûts...`);
-
-        const costsMapByTicketNum = {};
-        costsData.forEach(item => {
-          const numTicketKey = item.Num_Ticket || item.num_ticket || item.Num_ticket;
-          if (numTicketKey) {
-            costsMapByTicketNum[String(numTicketKey).trim()] = item;
-          }
-        });
+        addLog(`Traitement de ${ticketData.length} ticket(s) avec analyse ligne par ligne des coûts...`);
 
         for (const ticket of ticketData) {
           try {
-            const csvRef = String(ticket.Ref_Ticket || ticket.refTicket || ticket.Ref_ticket || ticket.id || "").trim();
-            const csvDate = String(ticket.Date || ticket.date || "").trim();
-            const csvTime = String(ticket.Heure || ticket.time || ticket.heure || "").trim();
-            const csvTitle = ticket.Titre || ticket.title || ticket.Titre_Ticket || "";
-            const csvDesc = ticket.Description || ticket.description || "";
-            const csvType = ticket.Type || ticket.type || "Incident";
-            const csvPriority = ticket.Priority || ticket.priority || "Medium";
-            const csvStatus = ticket.Status || ticket.status || "New";
+            const csvRef = String(ticket.refTicket || "").trim();
+            const csvDate = String(ticket.date || "").trim();
+            const csvTime = String(ticket.time || "").trim();
+            const csvTitle = ticket.title || "";
+            const csvDesc = ticket.description || "";
+            const csvType = ticket.type || "Incident";
+            const csvPriority = ticket.priority || "Medium";
+            const csvStatus = ticket.status || "New";
 
             if (!csvRef || csvRef === "undefined" || csvRef === "") {
               continue; 
             }
 
+            // Formattage de la date pour GLPI
             const [day, month, year] = csvDate.split('/');
             const formattedDate = `${year}-${month}-${day}`;
             let formattedTime = csvTime;
@@ -267,23 +246,13 @@ const CsvDynamicTester = () => {
             }
             const finalGlpiDateTime = `${formattedDate} ${formattedTime}`;
 
-            const matchedCostRow = costsMapByTicketNum[csvRef];
+            // 1. Récupération de TOUTES les lignes correspondantes à ce ticket dans le CSV de coûts
+            const matchedCostRows = costData.filter(c => String(c.tickets_id).trim() === csvRef);
 
-            const parseCsvNumber = (val) => {
-              if (!val) return 0;
-              return parseFloat(String(val).replace(',', '.').trim());
-            };
+            // Pour la création du ticket principal, on calcule la durée cumulée totale
+            const totalDurationSeconds = matchedCostRows.reduce((sum, row) => sum + (parseInt(row.actiontime, 10) || 0), 0);
 
-            let durationSeconds = 0;
-            let costTime = 0;
-            let costFixed = 0;
-
-            if (matchedCostRow) {
-              durationSeconds = parseInt(matchedCostRow.Duration_second || matchedCostRow.duration_second || 0, 10);
-              costTime = parseCsvNumber(matchedCostRow.secondTime_Cost || matchedCostRow.Time_Cost || matchedCostRow.time_cost);
-              costFixed = parseCsvNumber(matchedCostRow.CostFixed || matchedCostRow.cost_fixed || matchedCostRow.Fixed_Cost);
-            }
-
+            // 2. Création du ticket principal dans GLPI
             const ticketRes = await createGlpiTicket({
               title: csvTitle,
               description: csvDesc,
@@ -291,7 +260,7 @@ const CsvDynamicTester = () => {
               priority: csvPriority,
               status: csvStatus,
               fullDateTime: finalGlpiDateTime,
-              duration: durationSeconds, 
+              duration: totalDurationSeconds, // Durée totale de toutes les interventions cumulées
               externalRef: csvRef
             });
 
@@ -299,28 +268,27 @@ const CsvDynamicTester = () => {
             await updateTicketExternalId(newTicketId, csvRef);
             
             if (newTicketId) {
-              addLog(`Ticket #${newTicketId} créé (Ref CSV: ${csvRef}) | Durée: ${durationSeconds}s`);
+              addLog(`Ticket #${newTicketId} créé (Ref CSV: ${csvRef}) | Durée Globale: ${totalDurationSeconds}s`);
 
-              if (costFixed > 0 || costTime > 0) {
-                await addGlpiTicketCost(newTicketId, costFixed, costTime);
-                addLog(`   -> Coûts associés | Fixe: ${costFixed} MGA | Temps: ${costTime} MGA`);
-              }
+              // 3. ENVOI SÉPARÉ DE CHAQUE LIGNE DE COÛT TRACÉE
+              if (matchedCostRows.length > 0) {
+                for (const row of matchedCostRows) {
+                  const fCost = parseFloat(row.cost_fixed) || 0.00;
+                  const tCost = parseFloat(row.cost_time) || 0.00;
+                  const duration = parseInt(row.actiontime, 10) || 0;
 
-              let itemsArray = [];
-              const rawItems = ticket.Items1 || ticket.items || ticket.Items;
-              
-              if (rawItems) {
-                if (typeof rawItems === 'string') {
-                  try {
-                    itemsArray = JSON.parse(rawItems);
-                  } catch {
-                    itemsArray = rawItems.split(',').map(i => i.replace(/["'[\]]/g, '').trim());
+                  // On pousse à GLPI si la ligne contient au moins une info financière ou temporelle
+                  if (fCost > 0 || tCost > 0 || duration > 0) {
+                    await addGlpiTicketCost(newTicketId, fCost, tCost, duration);
+                    addLog(`   -> Segment financier injecté | Fixe: ${fCost} MGA | Horaire: ${tCost} MGA | Durée: ${duration}s`);
                   }
-                } else if (Array.isArray(rawItems)) {
-                  itemsArray = rawItems;
                 }
+              } else {
+                addLog(`   Aucun coût trouvé dans le fichier pour la Ref CSV: ${csvRef}`);
               }
 
+              // 4. Liaison des équipements associés au ticket
+              let itemsArray = ticket.items || [];
               if (itemsArray.length > 0) {
                 for (const itemName of itemsArray) {
                   const matchedDevice = createdDevicesMap[itemName];
@@ -351,7 +319,7 @@ const CsvDynamicTester = () => {
     <div style={styles.page}>
       <div style={styles.header}>
         <h2 style={styles.mainTitle}>Importation de Données Intégrales</h2>
-        <p style={styles.subtitle}>Sélectionnez les fichiers CSV du contenu (Contenu Import-data-juin-26) ainsi que l'archive ZIP des images associées.</p>
+        <p style={styles.subtitle}>Sélectionnez les fichiers CSV du contenu ainsi que l'archive ZIP des images associées.</p>
       </div>
 
       <div style={styles.grid}>
@@ -381,7 +349,7 @@ const CsvDynamicTester = () => {
           <div style={styles.inputWrapper}>
             <input type="file" accept=".csv" onChange={handleCostsUpload} disabled={importing} style={styles.fileInput} id="file-costs"/>
             <label htmlFor="file-costs" style={styles.fileLabel}>Choisir un fichier CSV</label>
-            {costsData?.length > 0 && <div style={styles.badgeSuccess}>{costsData.length} lignes financières</div>}
+            {costData?.length > 0 && <div style={styles.badgeSuccess}>{costData.length} lignes financières prêtes</div>}
           </div>
         </div>
 
@@ -419,7 +387,7 @@ const CsvDynamicTester = () => {
 };
 
 const styles = {
-  page: { backgroundColor: '#121212', color: '#f8fafc', fontFamily: 'system-ui, -apple-system, sans-serif', minHeight: '100vh' },
+  page: { backgroundColor: '#121212', color: '#f8fafc', fontFamily: 'system-ui, -apple-system, sans-serif', minHeight: '100vh', padding: '30px' },
   header: { marginBottom: '32px' },
   mainTitle: { fontSize: '24px', fontWeight: '700', color: '#00d2ff', margin: '0 0 8px 0' },
   subtitle: { fontSize: '14px', color: '#cbd5e1', margin: 0 },
@@ -431,7 +399,7 @@ const styles = {
   fileLabel: { display: 'block', textAlign: 'center', backgroundColor: 'transparent', border: '1px solid #334155', color: '#00d2ff', padding: '10px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', transition: 'all 0.2s' },
   badgeSuccess: { backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid #10b981', color: '#10b981', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', textAlign: 'center', fontWeight: '600' },
   actionSection: { display: 'flex', justifyContent: 'center', marginBottom: '32px' },
-  btnActive: { backgroundColor: '#00d2ff', color: '#121212', border: 'none', padding: '14px 40px', borderRadius: '6px', cursor: 'pointer', fontWeight: '700', fontSize: '15px', transition: 'background 0.2s' },
+  btnActive: { backgroundColor: '#00d2ff', color: '#121212', border: 'none', padding: '14px 40px', borderRadius: '6px', cursor: 'pointer', fontWeight: '700', fontSize: '15px', transition: 'background 0.2s', textTransform: 'uppercase', letterSpacing: '0.5px' },
   btnDisabled: { backgroundColor: '#1e293b', color: '#64748b', border: '1px solid #334155', padding: '14px 40px', borderRadius: '6px', cursor: 'not-allowed', fontWeight: '700', fontSize: '15px' },
   terminalContainer: { backgroundColor: '#121212', border: '1px solid #334155', borderRadius: '8px', padding: '20px', fontFamily: 'Consolas, Monaco, monospace' },
   terminalHeader: { fontSize: '13px', fontWeight: '600', color: '#00d2ff', textTransform: 'uppercase', marginBottom: '14px', letterSpacing: '0.5px' },

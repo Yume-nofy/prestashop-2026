@@ -371,29 +371,27 @@ export const updateTicketExternalId = async (ticketId, externalId) => {
     })
   });
 };
-export const addGlpiTicketCost = async (ticketId, fixedCost, timeCost) => {
+export const addGlpiTicketCost = async (ticketId, fixedCost, timeCost, duration = 0) => {
   try {
-    const totalCost = parseFloat(fixedCost || 0) + parseFloat(timeCost || 0);
-    
     const payload = {
       input: {
         tickets_id: Number(ticketId),
         name: "Coût analytique d'importation",
-        cost_fixed: parseFloat(fixedCost || 0),
-        cost_time: parseFloat(timeCost || 0),
-        totalcost: totalCost
+        cost_fixed: parseFloat(fixedCost) || 0,
+        cost_time: parseFloat(timeCost) || 0,
+        actiontime: parseInt(duration, 10) || 0
       }
     };
 
     return await apiGlpi('TicketCost', {
       method: 'POST',
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload) 
     });
+    
   } catch (error) {
     console.error(`Impossible d'ajouter le coût au ticket #${ticketId}:`, error);
   }
 };
-
 export const purgeAllGlpiTickets = async (onProgressLog) => {
   try {
     let totalPurged = 0;
