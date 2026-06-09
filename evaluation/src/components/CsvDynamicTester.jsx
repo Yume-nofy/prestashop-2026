@@ -11,11 +11,34 @@ import {
   linkItemToTicket,
   addUserProfileAndEntity,
   addGlpiTicketCost, 
-  updateTicketExternalId,
   uploadGlpiDocument, 
   linkDocumentToItem
 } from '../services/CrudService';
 import { getGlpiUserId, createGlpiUser, linkUserToGroup } from '../services/testApi';
+
+/**
+ * Détection des "Magic Numbers" (Signatures Binaires)
+ * Analyse les premiers octets du fichier pour valider son type réel
+ */
+const checkRealImageType = async (fileBlob) => {
+  const buffer = await fileBlob.slice(0, 4).arrayBuffer();
+  const arr = new Uint8Array(buffer);
+  
+  let header = "";
+  for (let i = 0; i < arr.length; i++) {
+    header += arr[i].toString(16).toUpperCase().padStart(2, '0');
+  }
+
+  // Comparaison avec les signatures standards
+  if (header.startsWith("89504E47")) {
+    return { valid: true, mime: "image/png", ext: "png" };
+  }
+  if (header.startsWith("FFD8FF")) {
+    return { valid: true, mime: "image/jpeg", ext: "jpg" };
+  }
+  
+  return { valid: false, mime: null, ext: null };
+};
 
 const CsvDynamicTester = () => {
   const { data: devicesData, parseFile: parseDevicesFile } = useCsvParser({ separator: ',' });
@@ -47,8 +70,8 @@ const CsvDynamicTester = () => {
   const handleCostsUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
-      parseCostFile(file); // Utilisation directe du parser normalisé
-      addLog(`Fichier Coûts & Durées chargé et corrigé : ${file.name}`);
+      parseCostFile(file);
+      addLog(`Fichier Coûts & Durées chargé : ${file.name}`);
     }
   };
 
@@ -68,6 +91,7 @@ const CsvDynamicTester = () => {
 
     try {
       addLog("Initialisation de la session GLPI...");
+      
       addLog("Création des groupes...");
       const groupMap = {};
       await Promise.all(devicesData.locations.map(async (loc) => {
@@ -178,24 +202,23 @@ const CsvDynamicTester = () => {
         }));
       }
 
+      // 🖼️ GESTION DU ZIP & SÉCURISATION BINAIRE DES IMAGES
       if (zipFile && Object.keys(createdDevicesMap).length > 0) {
-        addLog(`Désarchivage et traitement des images depuis : ${zipFile.name}...`);
+        addLog(`Désarchivage et inspection binaire des images depuis : ${zipFile.name}...`);
         try {
           const zip = new JSZip();
           const jsonContent = await zip.loadAsync(zipFile);
           
-          const imageFiles = Object.keys(jsonContent.files).filter(fileName => {
+          const potentialImageFiles = Object.keys(jsonContent.files).filter(fileName => {
             const isFolder = jsonContent.files[fileName].dir;
-            const isImage = /\.(jpe?g|png)$/i.test(fileName);
-            return !isFolder && isImage;
+            return !isFolder && /\.(jpe?g|png)$/i.test(fileName);
           });
 
-          addLog(`${imageFiles.length} image(s) détectée(s) dans le ZIP.`);
+          addLog(`${potentialImageFiles.length} fichier(s) graphique(s) potentiel(s) détecté(s).`);
 
-          for (const filePath of imageFiles) {
+          for (const filePath of potentialImageFiles) {
             const fileNameWithExt = filePath.split('/').pop();
             const assetKey = fileNameWithExt.replace(/\.[^/.]+$/, "").trim();
-
             const matchedAsset = createdDevicesMap[assetKey];
 
             if (!matchedAsset) {
@@ -204,18 +227,30 @@ const CsvDynamicTester = () => {
             }
 
             const fileData = await zip.files[filePath].async('blob');
-            const imageBlob = new File([fileData], fileNameWithExt, { type: fileData.type });
 
-            const uploadRes = await uploadGlpiDocument(imageBlob, fileNameWithExt);
+            // 🔍 Validation structurelle (Anti-renommage)
+            const realType = await checkRealImageType(fileData);
+
+            if (!realType.valid) {
+              addLog(`   ❌ Rejet : Le fichier "${fileNameWithExt}" contient des entêtes binaires corrompus ou invalides (Renommage suspect détecté).`);
+              continue;
+            }
+
+            // Reconstruction propre du nom et correction du type MIME
+            const cleanFileName = `${assetKey}.${realType.ext}`;
+            const imageBlob = new File([fileData], cleanFileName, { type: realType.mime });
+
+            addLog(`   Type binaire validé pour "${fileNameWithExt}" [${realType.mime.toUpperCase()}]`);
+
+            const uploadRes = await uploadGlpiDocument(imageBlob, cleanFileName);
 
             if (uploadRes && uploadRes.id) {
               await linkDocumentToItem(uploadRes.id, matchedAsset.type, matchedAsset.id);
-              addLog(`   -> Image ${fileNameWithExt} liée à l'équipement : ${assetKey}`);
+              addLog(`   -> Image associée avec succès à l'équipement : ${assetKey}`);
             }
           }
         } catch (zipErr) {
-          addLog(`Échec de l'importation des images ZIP : ${zipErr.message}`);
-          console.error(zipErr);
+          addLog(`Échec du traitement du conteneur ZIP : ${zipErr.message}`);
         }
       }
 
@@ -237,7 +272,6 @@ const CsvDynamicTester = () => {
               continue; 
             }
 
-            // Formattage de la date pour GLPI
             const [day, month, year] = csvDate.split('/');
             const formattedDate = `${year}-${month}-${day}`;
             let formattedTime = csvTime;
@@ -246,13 +280,9 @@ const CsvDynamicTester = () => {
             }
             const finalGlpiDateTime = `${formattedDate} ${formattedTime}`;
 
-            // 1. Récupération de TOUTES les lignes correspondantes à ce ticket dans le CSV de coûts
             const matchedCostRows = costData.filter(c => String(c.tickets_id).trim() === csvRef);
-
-            // Pour la création du ticket principal, on calcule la durée cumulée totale
             const totalDurationSeconds = matchedCostRows.reduce((sum, row) => sum + (parseInt(row.actiontime, 10) || 0), 0);
 
-            // 2. Création du ticket principal dans GLPI
             const ticketRes = await createGlpiTicket({
               title: csvTitle,
               description: csvDesc,
@@ -260,34 +290,28 @@ const CsvDynamicTester = () => {
               priority: csvPriority,
               status: csvStatus,
               fullDateTime: finalGlpiDateTime,
-              duration: totalDurationSeconds, // Durée totale de toutes les interventions cumulées
+              duration: totalDurationSeconds, 
               externalRef: csvRef
             });
 
             const newTicketId = ticketRes.id;
-            // await updateTicketExternalId(newTicketId, csvRef);
             
             if (newTicketId) {
               addLog(`Ticket #${newTicketId} créé (Ref CSV: ${csvRef}) | Durée Globale: ${totalDurationSeconds}s`);
 
-              // 3. ENVOI SÉPARÉ DE CHAQUE LIGNE DE COÛT TRACÉE
               if (matchedCostRows.length > 0) {
                 for (const row of matchedCostRows) {
                   const fCost = parseFloat(row.cost_fixed) || 0.00;
                   const tCost = parseFloat(row.cost_time) || 0.00;
                   const duration = parseInt(row.actiontime, 10) || 0;
 
-                  // On pousse à GLPI si la ligne contient au moins une info financière ou temporelle
                   if (fCost > 0 || tCost > 0 || duration > 0) {
                     await addGlpiTicketCost(newTicketId, fCost, tCost, duration);
-                    addLog(`   -> Segment financier injecté | Fixe: ${fCost} MGA | Horaire: ${tCost} MGA | Durée: ${duration}s`);
+                    addLog(`   -> Segment financier injecté | Fixe: ${fCost} | Horaire: ${tCost} | Durée: ${duration}s`);
                   }
                 }
-              } else {
-                addLog(`   Aucun coût trouvé dans le fichier pour la Ref CSV: ${csvRef}`);
               }
 
-              // 4. Liaison des équipements associés au ticket
               let itemsArray = ticket.items || [];
               if (itemsArray.length > 0) {
                 for (const itemName of itemsArray) {
@@ -295,8 +319,6 @@ const CsvDynamicTester = () => {
                   if (matchedDevice) {
                     await linkItemToTicket(newTicketId, matchedDevice.type, matchedDevice.id);
                     addLog(`   -> Équipement lié : ${itemName} (${matchedDevice.type})`);
-                  } else {
-                    addLog(`   -> Matériel "${itemName}" absent du parc.`);
                   }
                 }
               }
@@ -323,7 +345,6 @@ const CsvDynamicTester = () => {
       </div>
 
       <div style={styles.grid}>
-        {/* Fichier 1 */}
         <div style={styles.card}>
           <div style={styles.cardHeader}>1. Structure & Parc informatique</div>
           <div style={styles.inputWrapper}>
@@ -333,7 +354,6 @@ const CsvDynamicTester = () => {
           </div>
         </div>
 
-        {/* Fichier 2 */}
         <div style={styles.card}>
           <div style={styles.cardHeader}>2. Registre des Tickets d'Assistance</div>
           <div style={styles.inputWrapper}>
@@ -343,7 +363,6 @@ const CsvDynamicTester = () => {
           </div>
         </div>
 
-        {/* Fichier 3 */}
         <div style={styles.card}>
           <div style={styles.cardHeader}>3. Grille de Tarification & Coûts</div>
           <div style={styles.inputWrapper}>
@@ -353,7 +372,6 @@ const CsvDynamicTester = () => {
           </div>
         </div>
 
-        {/* Fichier 4 */}
         <div style={styles.card}>
           <div style={styles.cardHeader}>4. Album d'Images des Équipements</div>
           <div style={styles.inputWrapper}>

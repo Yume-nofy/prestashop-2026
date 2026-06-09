@@ -547,3 +547,17 @@ export const fetchItemsLinkedToTicket = async (ticketId) => {
 export const fetchTicketCosts = async (ticketId) => {
   return await apiGlpi(`TicketCost?tickets_id=${ticketId}`);
 };
+export const deleteGlpiDocumentItem = async (id) => {
+  return await apiGlpi(`Document_Item/${id}`, { method: 'DELETE' });
+};
+export const getGlpiDocuments = async () => {
+  return await apiGlpi('Document');
+};
+
+export const deleteGlpiDocument = async (id) => {
+  return await apiGlpi(`Document/${id}`, { method: 'DELETE' });
+};
+
+export const getGlpiDocumentItems = async () => {
+  return await apiGlpi('Document_Item');
+};

@@ -33,6 +33,7 @@ const GlpiItemList = () => {
       let manufacturerMap = {};
       let statusMap = {};
 
+      // 1. Récupération des dictionnaires de correspondances
       try {
         const [manufacturersData, statusesData] = await Promise.all([
           apiGlpi('Manufacturer').catch(() => []),
@@ -49,6 +50,7 @@ const GlpiItemList = () => {
         console.warn("Erreur lors du chargement des dictionnaires GLPI :", e);
       }
 
+      // 2. Récupération des éléments du parc matériel
       const typesToFetch = ['Computer', 'Monitor', 'NetworkEquipment', 'Peripheral']; 
       const itemsPromises = typesToFetch.map(async (type) => {
         try {
@@ -61,8 +63,9 @@ const GlpiItemList = () => {
       });
 
       const allItemsResults = await Promise.all(itemsPromises);
-      let combinedItems = allItemsResults.flat();
+      const combinedItems = allItemsResults.flat();
 
+      // 3. Récupération de la table des liaisons de documents
       let docItemsMap = {};
       try {
         const docItems = await fetchGlpiDocumentItems();
@@ -76,40 +79,47 @@ const GlpiItemList = () => {
         console.warn("Impossible de charger les liaisons d'images :", e);
       }
 
-      combinedItems = combinedItems.map(item => {
-        const key = `${item.itemtype}-${item.id}`;
-        return {
-          ...item,
-          manufacturerName: manufacturerMap[item.manufacturers_id] || "Inconnu",
-          statusName: statusMap[item.states_id] || "Par defaut",
-          documentId: docItemsMap[key] || null,
-          imageUrl: null 
-        };
-      });
+      // 4. Reconstruction des objets et RÉSOLUTION SIMULTANÉE des images de type Blob
 
-      setItems(combinedItems);
+const enrichedItems = await Promise.all(
+  combinedItems.map(async (item) => {
+    const key = `${item.itemtype}-${item.id}`;
+    // Ajoute ce log temporaire pour voir la clé générée
+    if (item.name === "PC-COMPTA-001") {
+      console.log(`Test pour PC-COMPTA-001 -> Clé générée: ${key}, Trouvé en map ?`, docItemsMap[key]);
+    }
+    
+    const documentId = docItemsMap[key] || null;
+          let imageUrl = null;
 
-      const uniqueStatuses = [...new Set(combinedItems.map(i => i.statusName))];
-      const uniqueManufacturers = [...new Set(combinedItems.map(i => i.manufacturerName))];
+          // Si un document est lié, on télécharge immédiatement le Blob d'image
+          if (documentId) {
+            try {
+              imageUrl = await fetchGlpiDocumentImage(documentId);
+            } catch (imgErr) {
+              console.error(`Erreur Blob sur document ID ${documentId}:`, imgErr);
+            }
+          }
+
+          return {
+            ...item,
+            manufacturerName: manufacturerMap[item.manufacturers_id] || "Inconnu",
+            statusName: statusMap[item.states_id] || "Par defaut",
+            documentId,
+            imageUrl
+          };
+        })
+      );
+
+      // 5. Unique mise à jour de l'état avec l'ensemble des données prêtes
+      setItems(enrichedItems);
+
+      // Génération des listes de filtres uniques
+      const uniqueStatuses = [...new Set(enrichedItems.map(i => i.statusName))];
+      const uniqueManufacturers = [...new Set(enrichedItems.map(i => i.manufacturerName))];
       
       setStatusesList(uniqueStatuses);
       setManufacturersList(uniqueManufacturers);
-
-      combinedItems.forEach(async (item) => {
-        if (item.documentId) {
-          const blobUrl = await fetchGlpiDocumentImage(item.documentId);
-          if (blobUrl) {
-            setItems(prevItems => {
-              const updated = [...prevItems];
-              const itemIndex = updated.findIndex(i => i.itemtype === item.itemtype && i.id === item.id);
-              if (itemIndex !== -1) {
-                updated[itemIndex].imageUrl = blobUrl;
-              }
-              return updated;
-            });
-          }
-        }
-      });
 
     } catch (err) {
       setError(`Erreur lors du chargement des composants : ${err.message}`);
@@ -131,6 +141,7 @@ const GlpiItemList = () => {
     return matchesSearch && matchesType && matchesStatus && matchesManufacturer;
   });
 
+
   if (loading) {
     return (
       <div style={styles.loadingContainer}>
@@ -147,7 +158,6 @@ const GlpiItemList = () => {
     );
   }
 
-  // Contenu principal de la liste
   const renderContent = () => (
     <div style={styles.pageContent}>
       <div style={styles.header}>
@@ -253,7 +263,6 @@ const GlpiItemList = () => {
     </div>
   );
 
-  // Condition d'affichage : si connecté en admin, on encapsule dans le Layout, sinon affichage brut complet
   return isAdmin ? <AdminLayout>{renderContent()}</AdminLayout> : <div style={styles.standalonePage}>{renderContent()}</div>;
 };
 
