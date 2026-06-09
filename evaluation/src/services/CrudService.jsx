@@ -326,7 +326,7 @@ export const createGlpiTicket = async (ticketDetails) => {
     
     const statuses = { 
       new: 1, incoming: 1, nouveau: 1,
-      processing: 2, assigned: 2, encours: 2,
+      processing: 2, assigned: 2, encours: 2,inprogress:2,
       planned: 3, planifie: 3,
       pending: 4, enattente: 4,
       solved: 5, resolu: 5,

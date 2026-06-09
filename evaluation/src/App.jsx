@@ -15,6 +15,8 @@ import TicketsList from './components/TicketsList';
 
 import AdminLayout from './components/AdminLayout';
 import ResetData from './components/ResetData';
+import TicketsListKanban from './components/TicketsListKanban';
+import StatusConfigPage from './components/StatusConfigPage';
 
 const Login = () => {
   const navigate = useNavigate(); 
@@ -83,6 +85,25 @@ const router = createBrowserRouter([
           <GlpiDashboard />
         </AdminLayout>
       </ProtectedAdmin>
+    )
+  },{
+    path: '/statusConfig',
+    element: (
+      <ProtectedAdmin>
+        <AdminLayout>
+          <StatusConfigPage />
+        </AdminLayout>
+      </ProtectedAdmin>
+    )
+  },
+   {
+    path: '/ticketkanban',
+    element: (
+    
+        <AdminLayout>
+          <TicketsListKanban />
+        </AdminLayout>
+      
     )
   },
   {

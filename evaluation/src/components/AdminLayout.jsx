@@ -21,7 +21,9 @@ const AdminLayout = ({ children }) => {
         <nav style={styles.nav}>
           <Link to="/admin" style={styles.navLink}>Tableau de bord</Link>
           <Link to="/ticket" style={styles.navLink}>Créer un ticket</Link>
+          <Link to="/statusConfig" style={styles.navLink}>config status ticket</Link>
           <Link to="/adminTicket" style={styles.navLink}>Gestion des tickets</Link>
+          <Link to="/ticketKanban" style={styles.navLink}>liste tickets</Link>
           <Link to="/testCsv" style={styles.navLink}>Importation de données</Link>
           <Link to="/admin/reset" style={styles.navLink}>Réinitialisation</Link>
           <Link to="/list" style={styles.navLinkPublic}>Vue publique du parc</Link>

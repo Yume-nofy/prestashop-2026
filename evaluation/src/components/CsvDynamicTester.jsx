@@ -202,7 +202,7 @@ const CsvDynamicTester = () => {
         }));
       }
 
-      // 🖼️ GESTION DU ZIP & SÉCURISATION BINAIRE DES IMAGES
+      //  GESTION DU ZIP & SÉCURISATION BINAIRE DES IMAGES
       if (zipFile && Object.keys(createdDevicesMap).length > 0) {
         addLog(`Désarchivage et inspection binaire des images depuis : ${zipFile.name}...`);
         try {
