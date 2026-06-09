@@ -148,7 +148,7 @@ const StatusConfigPage = () => {
               </div> */}
 
               <div style={styles.formGroup}>
-                <label style={styles.label}>Nom en Malgache 🇲🇬</label>
+                <label style={styles.label}>Nom en Malgache</label>
                 <input 
                   type="text" 
                   value={editingStatus.name_mg} 

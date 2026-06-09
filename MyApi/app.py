@@ -88,25 +88,38 @@ def add_status():
     conn.close()
 
     return jsonify({"message": "Status added"}), 201
-
-# Route optionnelle pour mettre à jour un statut existant (très utile pour la page de configuration)
+    
 @app.route("/status/<int:status_id>", methods=["PUT"])
 def update_status(status_id):
     data = request.get_json()
-    couleur = data.get("couleur")
-    name_fr = data.get("name_fr")
-    name_en = data.get("name_en")
-    name_mg = data.get("name_mg")
-
+    
     conn = sqlite3.connect("test.db")
     cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE status SET couleur = ?, name_fr = ?, name_en = ?, name_mg = ? WHERE id = ?",
-        (couleur, name_fr, name_en, name_mg, status_id)
-    )
+    
+    # 1. On récupère d'abord les valeurs actuelles en base de données
+    cursor.execute("SELECT couleur, name_fr, name_en, name_mg FROM status WHERE id = ?", (status_id,))
+    current_status = cursor.fetchone()
+    
+    if not current_status:
+        conn.close()
+        return jsonify({"message": "Status not found"}), 404
+        
+    # 2. Si le champ envoyé est vide/nul, on reprend l'ancienne valeur
+    couleur = data.get("couleur") if data.get("couleur") else current_status[0]
+    name_fr = data.get("name_fr") if data.get("name_fr") else current_status[1]
+    name_en = data.get("name_en") if data.get("name_en") else current_status[2]
+    name_mg = data.get("name_mg") if data.get("name_mg") else current_status[3]
+
+    # 3. On applique la mise à jour avec les valeurs fusionnées
+    cursor.execute("""
+        UPDATE status 
+        SET couleur = ?, name_fr = ?, name_en = ?, name_mg = ? 
+        WHERE id = ?
+    """, (couleur, name_fr, name_en, name_mg, status_id))
+    
     conn.commit()
     conn.close()
-    return jsonify({"message": "Status updated"}), 200
+    return jsonify({"message": "Status updated successfully"}), 200
 
 if __name__ == "__main__":
     app.run(port=5000, debug=True)
