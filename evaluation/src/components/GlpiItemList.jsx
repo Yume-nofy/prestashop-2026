@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { fetchGlpiItems, fetchGlpiDocumentItems, fetchGlpiDocumentImage } from '../services/CrudService';
 import { apiGlpi } from '../api/apiGlpi';
-import AdminLayout from './AdminLayout'; 
 
 const GlpiItemList = () => {
   const [items, setItems] = useState([]);
@@ -263,7 +262,7 @@ const enrichedItems = await Promise.all(
     </div>
   );
 
-  return isAdmin ? <AdminLayout>{renderContent()}</AdminLayout> : <div style={styles.standalonePage}>{renderContent()}</div>;
+  return  <div style={styles.standalonePage}>{renderContent()}</div>;
 };
 
 const styles = {

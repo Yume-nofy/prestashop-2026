@@ -13,7 +13,10 @@ import CreateTicket from './components/CreateTicket';
 import GlpiDashboard from './components/GlpiDashboard';
 import TicketsList from './components/TicketsList';
 
-import AdminLayout from './components/AdminLayout';
+// Importation de tes deux nouveaux layouts séparés
+import BackOfficeLayout from './components/BackOfficeLayout';
+import FrontOfficeLayout from './components/FrontOfficeLayout';
+
 import ResetData from './components/ResetData';
 import TicketsListKanban from './components/TicketsListKanban';
 import StatusConfigPage from './components/StatusConfigPage';
@@ -54,7 +57,7 @@ const styles = {
 };
 
 const router = createBrowserRouter([
-  // --- ROUTES PUBLIQUES / FRONTOFFICE ---
+  // --- ROUTES PUBLIQUES (SANS LAYOUT COMPLEXE) ---
   {
     path: '/',
     element: <Home />
@@ -67,42 +70,52 @@ const router = createBrowserRouter([
     path: '/LoginBack',
     element: <LoginBack />
   },
+
+  // --- ROUTES FRONTOFFICE / ESPACE SUPPORT (ENCAPSULÉES) ---
   {
     path: '/list',
-    element: <GlpiItemList />
+    element: (
+      <FrontOfficeLayout>
+        <GlpiItemList />
+      </FrontOfficeLayout>
+    )
   },
   {
-    path: '/ticket', // Création de ticket utilisateur
-    element: <CreateTicket />
+    path: '/ticket', 
+    element: (
+      <FrontOfficeLayout>
+        <CreateTicket />
+      </FrontOfficeLayout>
+    )
   },
 
-  // --- ROUTES BACKOFFICE (PROTÉGÉES + LAYOUT COMMUN) ---
+  // --- ROUTES BACKOFFICE / ADMINISTRATION (PROTÉGÉES + BACKOFFICE LAYOUT) ---
   {
     path: '/admin',
     element: (
       <ProtectedAdmin>
-        <AdminLayout>
+        <BackOfficeLayout>
           <GlpiDashboard />
-        </AdminLayout>
-      </ProtectedAdmin>
-    )
-  },{
-    path: '/statusConfig',
-    element: (
-      <ProtectedAdmin>
-        <AdminLayout>
-          <StatusConfigPage />
-        </AdminLayout>
+        </BackOfficeLayout>
       </ProtectedAdmin>
     )
   },
-   {
+  {
+    path: '/statusConfig',
+    element: (
+      <ProtectedAdmin>
+        <BackOfficeLayout>
+          <StatusConfigPage />
+        </BackOfficeLayout>
+      </ProtectedAdmin>
+    )
+  },
+  {
     path: '/ticketkanban',
     element: (
-    
-        <AdminLayout>
+        <FrontOfficeLayout>
           <TicketsListKanban />
-        </AdminLayout>
+        </FrontOfficeLayout>
       
     )
   },
@@ -110,34 +123,34 @@ const router = createBrowserRouter([
     path: '/adminTicket',
     element: (
       <ProtectedAdmin>
-        <AdminLayout>
+        <BackOfficeLayout>
           <TicketsList />
-        </AdminLayout>
+        </BackOfficeLayout>
       </ProtectedAdmin>
     )
   },
   {
-    path: '/testCsv', // Page pour importer tes 4 fichiers (3 CSV + 1 ZIP)
+    path: '/testCsv', 
     element: (
       <ProtectedAdmin>
-        <AdminLayout>
+        <BackOfficeLayout>
           <CsvDynamicTester />
-        </AdminLayout>
+        </BackOfficeLayout>
       </ProtectedAdmin>
     )
   },
   {
-    path: '/admin/reset', // Page dédiée pour la réinitialisation de l'application
+    path: '/admin/reset', 
     element: (
       <ProtectedAdmin>
-        <AdminLayout>
+        <BackOfficeLayout>
           <ResetData />
-        </AdminLayout>
+        </BackOfficeLayout>
       </ProtectedAdmin>
     )
   },
 
-  // --- ENCIENNES ROUTES DE TEST (À GARDER OU TRIER PLUS TARD) ---
+  // --- ANCIENNES ROUTES DE TEST ---
   {
     path: '/tableau',
     element: (
