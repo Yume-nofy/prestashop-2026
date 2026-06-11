@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchGlpiTickets, deleteGlpiTicket } from '../services/CrudService';
 import { apiGlpi } from '../api/apiGlpi';
-
+import { apiLocalStatus } from '../api/configApi';
 const TicketsList = () => {
   const [tickets, setTickets] = useState([]);
   const [selectedTicket, setSelectedTicket] = useState(null);
@@ -11,14 +11,14 @@ const TicketsList = () => {
 
   const [allLinks, setAllLinks] = useState([]);
   const [allCosts, setAllCosts] = useState([]);
-  
+  const [kanbanStatuses, setKanbanStatuses] = useState([]); 
   // ÉTAT POUR LE POP-UP GLOBAL
   const [isModalOpen, setIsModalOpen] = useState(false);
-
+  const CURRENT_LANG = localStorage.getItem('kanban_lang') || 'fr';
   const priorityLabels = { 1: 'Très basse', 2: 'Basse', 3: 'Moyenne', 4: 'Haute', 5: 'Très haute' };
   const typeLabels = { 1: 'Incident', 2: 'Demande' };
   
-  const statusConfig = {
+  var statusConfig = {
     1: { label: 'Nouveau', color: '#00d2ff', bg: 'rgba(0, 210, 255, 0.1)', border: '#00d2ff' },
     2: { label: 'En cours (Attribué)', color: '#38bdf8', bg: 'rgba(56, 189, 248, 0.1)', border: '#38bdf8' },
     3: { label: 'Planifié', color: '#a855f7', bg: 'rgba(168, 85, 247, 0.1)', border: '#a855f7' },
@@ -46,6 +46,19 @@ const TicketsList = () => {
       setTickets(cleanTickets);
       setAllLinks(Array.isArray(linksRes) ? linksRes : []);
       setAllCosts(Array.isArray(costsRes) ? costsRes : []);
+      const localStatuses = await apiLocalStatus(`status?lang=${CURRENT_LANG}`);
+            const formattedStatuses = localStatuses.map(status => ({
+              id: status.id, 
+              label: status.name,
+              color: status.couleur,
+              border: status.couleur,
+              bg: status.couleur.startsWith('#') ? `${status.couleur}0D` : 'rgba(0, 210, 255, 0.05)' 
+            }));
+      
+            setKanbanStatuses(formattedStatuses);
+            
+            
+            
 
     } catch (err) {
       console.error("Erreur lors de l'initialisation des données GLPI:", err);
@@ -133,7 +146,8 @@ const TicketsList = () => {
               </thead>
               <tbody>
                 {tickets.map(ticket => {
-                  const status = statusConfig[ticket.status] || { label: `Code ${ticket.status}`, color: '#94a3b8', bg: '#1e293b', border: '#334155' };
+                  const status = kanbanStatuses[ticket.status] ;
+    
                   const isSelected = selectedTicket?.id === ticket.id;
 
                   return (

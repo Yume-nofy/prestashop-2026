@@ -6,16 +6,22 @@ const StatusConfigPage = () => {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState({ text: '', type: '' });
   const [editingStatus, setEditingStatus] = useState(null);
+  
+  // INITIALISATION DE LA LANGUE VIA LOCALSTORAGE (Défaut : 'fr')
+  const [currentLang, setCurrentLang] = useState(() => {
+    return localStorage.getItem('kanban_lang') || 'fr';
+  });
 
+  // RECHARGER LES STATUTS À CHAQUE FOIS QUE LA LANGUE CHANGE
   useEffect(() => {
     loadStatuses();
-  }, []);
+  }, [currentLang]);
 
-  // On demande la liste complète à l'API (on va créer une route globale ou adapter le GET)
+  // Passe la langue choisie à l'API SQLite
   const loadStatuses = async () => {
     setLoading(true);
     try {
-      const res = await apiLocalStatus('status?lang=all'); 
+      const res = await apiLocalStatus(`status?lang=${currentLang}`); 
       setStatuses(res);
     } catch (err) {
       setMessage({ text: "Impossible de charger les statuts depuis SQLite.", type: 'error' });
@@ -23,16 +29,20 @@ const StatusConfigPage = () => {
       setLoading(false);
     }
   };
-// console.log(statuses);
-  // On pré-remplit le formulaire avec TOUTES les valeurs déjà stockées
+
+  // HANDLER POUR CHANGER LA LANGUE
+  const handleLangChange = (lang) => {
+    setCurrentLang(lang);
+    localStorage.setItem('kanban_lang', lang);
+  };
+
   const handleEditClick = (status) => {
+    // Si l'API retourne uniquement {id, couleur, name}, on garde l'ancienne structure adaptative
     setEditingStatus({
       id: status.id,
       couleur: status.couleur || '#00d2ff',
-      name_fr: status.name_fr || '', 
-      name_en: status.name_en || '',          
-      name_mg: status.name_mg || '',
-      name:status.name           
+      name_fr: status.name_fr || status.name || '', 
+      name_mg: status.name_mg || status.name || ''
     });
   };
 
@@ -48,7 +58,7 @@ const StatusConfigPage = () => {
 
       setMessage({ text: "Configuration mise à jour avec succès !", type: 'success' });
       setEditingStatus(null);
-      loadStatuses();
+      loadStatuses(); // Rafraîchit la liste avec la langue en cours
     } catch (err) {
       setMessage({ text: `Erreur de modification : ${err.message}`, type: 'error' });
     }
@@ -64,9 +74,30 @@ const StatusConfigPage = () => {
 
   return (
     <div style={styles.page}>
+      
+      {/* HEADER AVEC LE SÉLECTEUR DE LANGUE */}
       <div style={styles.header}>
-        <h2 style={styles.title}>Personnalisation du Tableau Kanban</h2>
-        <p style={styles.subtitle}>Modifiez librement la couleur ou les traductions de vos colonnes.</p>
+        <div>
+          <h2 style={styles.title}>Personnalisation du Tableau Kanban</h2>
+          <p style={styles.subtitle}>Modifiez librement la couleur ou les traductions de vos colonnes.</p>
+        </div>
+        
+        {/* 🌟 ZONE DES BOUTONS DE LANGUE */}
+        <div style={styles.langSelectorContainer}>
+          <span style={styles.langLabel}>Langue active :</span>
+          <button 
+            onClick={() => handleLangChange('fr')} 
+            style={currentLang === 'fr' ? styles.btnLangActive : styles.btnLangInactive}
+          >
+            Français
+          </button>
+          <button 
+            onClick={() => handleLangChange('mg')} 
+            style={currentLang === 'mg' ? styles.btnLangActive : styles.btnLangInactive}
+          >
+            Malagasy
+          </button>
+        </div>
       </div>
 
       {message.text && (
@@ -78,14 +109,13 @@ const StatusConfigPage = () => {
       <div style={styles.layout}>
         {/* LISTE DES STATUTS ACTUELS */}
         <div style={styles.listContainer}>
-          <h3 style={styles.sectionTitle}>Statuts Enregistrés</h3>
+          <h3 style={styles.sectionTitle}>Statuts Enregistrés ({currentLang.toUpperCase()})</h3>
           <div style={styles.grid}>
             {statuses.map(s => (
               <div key={s.id} style={{ ...styles.statusCard, borderLeft: `6px solid ${s.couleur}` }}>
                 <div style={styles.cardInfo}>
                   <div style={styles.statusName}>
-                    {/* FR : {s.name_fr || '—'} | MG : {s.name_mg || '—'} */}
-                    nom: {s.name||'-'}
+                    Nom : {s.name || '-'}
                   </div>
                   <div style={styles.colorPreview}>
                     <span style={{ ...styles.colorDot, backgroundColor: s.couleur }} />
@@ -100,7 +130,7 @@ const StatusConfigPage = () => {
           </div>
         </div>
 
-        {/* FORMULAIRE SANS CHAMPS REQUIS */}
+        {/* FORMULAIRE DE MODIFICATION */}
         {editingStatus && (
           <div style={styles.formContainer}>
             <h3 style={styles.sectionTitle}>Modifier le Statut #{editingStatus.id}</h3>
@@ -136,17 +166,6 @@ const StatusConfigPage = () => {
                 />
               </div>
 
-              {/* <div style={styles.formGroup}>
-                <label style={styles.label}>Nom en Anglais</label>
-                <input 
-                  type="text" 
-                  value={editingStatus.name_en} 
-                  onChange={(e) => setEditingStatus(prev => ({ ...prev, name_en: e.target.value }))}
-                  style={styles.input}
-                  placeholder="Ex: New"
-                />
-              </div> */}
-
               <div style={styles.formGroup}>
                 <label style={styles.label}>Nom en Malgache</label>
                 <input 
@@ -174,12 +193,19 @@ const StatusConfigPage = () => {
   );
 };
 
-// Les styles restent strictement identiques
+// Objets de styles augmentés pour le sélecteur de langue
 const styles = {
   page: { backgroundColor: '#121212', minHeight: '100vh', color: '#f8fafc', fontFamily: 'system-ui, sans-serif', padding: '30px' },
-  header: { marginBottom: '24px', borderBottom: '1px solid #223049', paddingBottom: '16px' },
+  header: { marginBottom: '24px', borderBottom: '1px solid #223049', paddingBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   title: { fontSize: '22px', fontWeight: '700', color: '#00d2ff', margin: '0 0 6px 0' },
   subtitle: { fontSize: '13px', color: '#cbd5e1', margin: 0 },
+  
+  // Nouveaux styles pour les langues
+  langSelectorContainer: { display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: '#1e1e1e', padding: '6px 12px', borderRadius: '6px', border: '1px solid #2d3748' },
+  langLabel: { fontSize: '12px', color: '#94a3b8', fontWeight: '600' },
+  btnLangActive: { backgroundColor: '#00d2ff', border: 'none', color: '#121212', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' },
+  btnLangInactive: { backgroundColor: '#121212', border: '1px solid #334155', color: '#cbd5e1', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' },
+
   loadingContainer: { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#121212' },
   loadingText: { color: '#00d2ff', fontFamily: 'monospace' },
   layout: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', alignItems: 'flex-start' },

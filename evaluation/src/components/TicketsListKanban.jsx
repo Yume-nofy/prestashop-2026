@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { fetchGlpiTickets, deleteGlpiTicket } from '../services/CrudService'; 
 import { apiGlpi } from '../api/apiGlpi';
-// Import de ton nouveau service d'API locale
 import { apiLocalStatus } from '../api/configApi'; 
 
 const TicketsListKanban = () => {
   const [tickets, setTickets] = useState([]);
-  const [kanbanStatuses, setKanbanStatuses] = useState([]); // Remplacera la constante statique
+  const [kanbanStatuses, setKanbanStatuses] = useState([]); 
+  const [technicians, setTechnicians] = useState([]); 
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -17,6 +17,11 @@ const TicketsListKanban = () => {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  // ÉTATS POUR LA MODALE DE SÉLECTION DU TECHNICIEN
+  const [isTechModalOpen, setIsTechModalOpen] = useState(false);
+  const [selectedTechId, setSelectedTechId] = useState('');
+  const [pendingDropData, setPendingDropData] = useState(null);
 
   const [newTicket, setNewTicket] = useState({
     name: '',
@@ -29,8 +34,11 @@ const TicketsListKanban = () => {
   const priorityLabels = { 1: 'Très basse', 2: 'Basse', 3: 'Moyenne', 4: 'Haute', 5: 'Très haute' };
   const typeLabels = { 1: 'Incident', 2: 'Demande' };
 
-  // Définir la langue ici : 'mg', 'fr' ou 'en'
-  const CURRENT_LANG = 'mg'; 
+  const CURRENT_LANG = localStorage.getItem('kanban_lang') || 'fr'; 
+
+  const STATUS_NEW = 1;
+  const STATUS_IN_PROGRESS = 2; 
+  const STATUS_CLOSED = 6;      
 
   useEffect(() => {
     loadAllTicketsData();
@@ -39,81 +47,42 @@ const TicketsListKanban = () => {
   const loadAllTicketsData = async () => {
     setLoading(true);
     try {
-      // 1. Charger les statuts personnalisés depuis SQLite (localhost:5000)
       const localStatuses = await apiLocalStatus(`status?lang=${CURRENT_LANG}`);
       
-      // On formate l'objet pour ajouter dynamiquement la couleur de bordure et le fond transparent
       const formattedStatuses = localStatuses.map(status => ({
-        id: status.id, // Correspondra à 1, 2 ou 5 (ID GLPI)
+        id: status.id, 
         label: status.name,
         color: status.couleur,
         border: status.couleur,
-        // Si c'est un hexadécimal, on applique une opacité en CSS ou on garde la couleur pure
         bg: status.couleur.startsWith('#') ? `${status.couleur}0D` : 'rgba(0, 210, 255, 0.05)' 
       }));
 
       setKanbanStatuses(formattedStatuses);
-
-      // Récupération des ID valides pour filtrer les tickets GLPI
       const validStatusIds = formattedStatuses.map(s => s.id);
 
-      // 2. Charger les données GLPI
-      const [ticketsRes, linksRes, costsRes] = await Promise.all([
+      const [ticketsRes, linksRes, costsRes, usersRes] = await Promise.all([
         fetchGlpiTickets(),
         apiGlpi('Item_Ticket'),
-        apiGlpi('TicketCost')
+        apiGlpi('TicketCost'),
+        apiGlpi('User') 
       ]);
       
       const cleanTickets = Array.isArray(ticketsRes) ? ticketsRes : [];
-      // Filtrage dynamique basé sur les ID reçus de SQLite
       const kanbanTickets = cleanTickets.filter(t => validStatusIds.includes(parseInt(t.status, 10)));
       kanbanTickets.sort((a, b) => b.id - a.id);
       
       setTickets(kanbanTickets);
       setAllLinks(Array.isArray(linksRes) ? linksRes : []);
       setAllCosts(Array.isArray(costsRes) ? costsRes : []);
+
+      const cleanUsers = Array.isArray(usersRes) ? usersRes : [];
+      setTechnicians(cleanUsers.map(u => ({ id: u.id, name: u.name || u.realname || u.name })));
+
     } catch (err) {
       console.error("Erreur d'initialisation Kanban:", err);
-      setMessage({ text: "Impossible de charger le flux ou les configurations des colonnes.", type: 'error' });
+      setMessage({ text: "Impossible de charger le flux ou les configurations.", type: 'error' });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const openCreateModalForColumn = (statusId) => {
-    setNewTicket({
-      name: '',
-      content: '',
-      type: '1',
-      urgency: '3',
-      status: statusId
-    });
-    setIsCreateModalOpen(true);
-  };
-
-  const handleCreateSubmit = async (e) => {
-    e.preventDefault();
-    if (!newTicket.name.trim()) return;
-
-    setActionLoading(true);
-    try {
-      const payload = {
-        name: newTicket.name.trim(),
-        content: newTicket.content.trim() || 'Aucune description fournie.',
-        status: newTicket.status, 
-        type: parseInt(newTicket.type, 10),
-        priority: parseInt(newTicket.urgency, 10)
-      };
-
-      await apiGlpi('Ticket', { method: 'POST', body: JSON.stringify({input:payload})});
-      setMessage({ text: "Nouveau ticket injecté avec succès.", type: 'success' });
-      
-      setIsCreateModalOpen(false);
-      await loadAllTicketsData();
-    } catch (err) {
-      setMessage({ text: `Erreur d'injection : ${err.message}`, type: 'error' });
-    } finally {
-      setActionLoading(false);
     }
   };
 
@@ -130,41 +99,141 @@ const TicketsListKanban = () => {
     const ticketId = parseInt(e.dataTransfer.getData('text/plain'), 10);
     
     const draggedTicket = tickets.find(t => t.id === ticketId);
-    if (!draggedTicket || parseInt(draggedTicket.status, 10) === targetStatusId) return;
+    if (!draggedTicket) return;
 
-    let resolutionComment = "";
-    if (targetStatusId === 6) {
-      resolutionComment = window.prompt(
-        ` Clôture technique de l'incident #${ticketId}\nVeuillez saisir le rapport de résolution ou la justification de fermeture :`
-      );
-      if (resolutionComment === null) return; 
+    const currentStatusId = parseInt(draggedTicket.status, 10);
+    if (currentStatusId === targetStatusId) return;
+
+    // --- RÈGLE 1 : INTERCEPTION POUR ASSIGNATION D'UN TECHNICIEN ---
+    if (currentStatusId === STATUS_NEW && targetStatusId === STATUS_IN_PROGRESS) {
+      if (technicians.length === 0) {
+        alert("Aucun technicien disponible dans le système GLPI.");
+        return;
+      }
+      // On stocke les informations du drag et on ouvre la modale personnalisée
+      setPendingDropData({ ticketId, targetStatusId, currentStatusId, draggedTicket });
+      setSelectedTechId(technicians[0]?.id || '');
+      setIsTechModalOpen(true);
+      return; 
     }
 
-    const previousTickets = [...tickets];
-    setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, status: targetStatusId } : t));
+    // Si ce n'est pas une assignation de technicien, on continue vers le traitement standard (ex: clôture)
+    processTicketUpdate(ticketId, targetStatusId, currentStatusId, draggedTicket, null);
+  };
 
-    try {
-      const updatePayload ={input:{ id: ticketId, status: targetStatusId }};
-      if (resolutionComment) {
-        updatePayload.content = draggedTicket.content + `<br/><br/><b>[Résolution Kanban] :</b> ${resolutionComment}`;
-      }
+  // Validation finale après choix du technicien dans la liste déroulante
+  const handleTechSelectSubmit = (e) => {
+    e.preventDefault();
+    if (!selectedTechId) return;
+    
+    const { ticketId, targetStatusId, currentStatusId, draggedTicket } = pendingDropData;
+    setIsTechModalOpen(false);
+    processTicketUpdate(ticketId, targetStatusId, currentStatusId, draggedTicket, parseInt(selectedTechId, 10));
+  };
 
-      await apiGlpi(`Ticket/${ticketId}`, {
-        method: 'PUT',
-        body: JSON.stringify(updatePayload)
+ const processTicketUpdate = async (ticketId, targetStatusId, currentStatusId, draggedTicket, technicianId) => {
+  let updatePayload = { input: { id: ticketId, status: targetStatusId } };
+  let rawComment = ""; // On stocke le commentaire brut ici
+
+  // --- RÈGLE 2 : COMMENTAIRE OBLIGATOIRE DE CLÔTURE OU RÉOUVERTURE ---
+  if (targetStatusId === STATUS_CLOSED) {
+    const reason = window.prompt(`Clôture du ticket #${ticketId}\nVeuillez spécifier le rapport de résolution :`);
+    if (reason === null) return; 
+    if (!reason.trim()) {
+      alert("La justification est obligatoire pour fermer une tâche.");
+      return;
+    }
+    rawComment = `<b>[Clôture ticket] :</b> ${reason.trim()}`;
+  } else if (currentStatusId === STATUS_CLOSED && targetStatusId !== STATUS_CLOSED) {
+    const reason = window.prompt(`Réouverture du ticket #${ticketId}\nPourquoi réouvrez-vous cette tâche ? :`);
+    if (reason === null) return;
+    if (!reason.trim()) {
+      alert("La justification est obligatoire pour réouvrir une tâche.");
+      return;
+    }
+    rawComment = `<b>[Réouverture du ticket] :</b> ${reason.trim()}`;
+  }
+
+  const previousTickets = [...tickets];
+  
+  // UI Optimiste
+  setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, status: targetStatusId } : t));
+
+  try {
+    // 1. Mise à jour du statut du Ticket sur GLPI (sans toucher au champ 'content')
+    await apiGlpi(`Ticket/${ticketId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updatePayload)
+    });
+
+    // 2. NOUVEAU : Si un commentaire de réouverture/clôture existe, on l'ajoute comme SUIVI (ITILFollowup)
+    if (rawComment) {
+      await apiGlpi(`Ticket/${ticketId}/ITILFollowup`, {
+        method: 'POST',
+        body: JSON.stringify({
+          input: {
+            items_id: ticketId,
+            itemtype: 'Ticket',
+            content: rawComment, // Le commentaire s'écrira proprement dans l'historique du ticket
+            is_private: 0        // 0 = Public (visible par le demandeur), 1 = Privé
+          }
+        })
       });
+    }
 
-      setMessage({ text: `Ticket #${ticketId} déplacé avec succès.`, type: 'success' });
+    // 3. Attribution du technicien choisi depuis la liste si présent
+    if (technicianId) {
+      await apiGlpi(`Ticket/${ticketId}/Ticket_User`, {
+        method: 'POST',
+        body: JSON.stringify({
+          input: {
+            tickets_id: ticketId,
+            users_id: technicianId,
+            type: 2 
+          }
+        })
+      });
+    }
+
+    setMessage({ text: `Ticket #${ticketId} mis à jour avec succès.`, type: 'success' });
+    await loadAllTicketsData(); 
+  } catch (err) {
+    setTickets(previousTickets); 
+    console.error(err);
+    setMessage({ text: `Erreur de traitement GLPI : ${err.message}`, type: 'error' });
+  }
+};
+
+  const openCreateModalForColumn = (statusId) => {
+    setNewTicket({ name: '', content: '', type: '1', urgency: '3', status: statusId });
+    setIsCreateModalOpen(true);
+  };
+
+  const handleCreateSubmit = async (e) => {
+    e.preventDefault();
+    if (!newTicket.name.trim()) return;
+    setActionLoading(true);
+    try {
+      const payload = {
+        name: newTicket.name.trim(),
+        content: newTicket.content.trim() || 'Aucune description fournie.',
+        status: newTicket.status, 
+        type: parseInt(newTicket.type, 10),
+        urgency: parseInt(newTicket.urgency, 10)
+      };
+      await apiGlpi('Ticket', { method: 'POST', body: JSON.stringify({ input: payload }) });
+      setMessage({ text: "Nouveau ticket injecté avec succès.", type: 'success' });
+      setIsCreateModalOpen(false);
       await loadAllTicketsData();
     } catch (err) {
-      setTickets(previousTickets);
-      setMessage({ text: `Impossible de modifier le statut sur le serveur GLPI : ${err.message}`, type: 'error' });
+      setMessage({ text: `Erreur d'injection : ${err.message}`, type: 'error' });
+    } finally {
+      setActionLoading(false);
     }
   };
 
   const handleDelete = async (ticketId) => {
     if (!window.confirm(`Confirmez-vous la suppression définitive du ticket #${ticketId} ?`)) return;
-    
     setActionLoading(true);
     try {
       await deleteGlpiTicket(ticketId);
@@ -179,24 +248,6 @@ const TicketsListKanban = () => {
     }
   };
 
-  const formatDuration = (minutes) => {
-    if (!minutes || minutes === 0) return "Non spécifiée";
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    return h > 0 ? `${h}h ${m}min` : `${m}min`;
-  };
-
-  const linkedItems = allLinks.filter(item => parseInt(item.tickets_id, 10) === selectedTicket?.id);
-  const ticketCosts = allCosts.filter(cost => parseInt(cost.tickets_id, 10) === selectedTicket?.id);
-  
-  const totalTicketCost = ticketCosts.reduce((sum, item) => {
-    const fixed = parseFloat(item.cost_fixed) || 0;
-    const material = parseFloat(item.cost_material) || 0;
-    const time = parseFloat(item.cost_time) || 0;
-    const minutes = parseInt(item.actiontime, 10) || 0;
-    return sum + fixed + material + (time * (minutes / 60));
-  }, 0);
-
   if (loading) {
     return (
       <div style={styles.loadingContainer}>
@@ -207,7 +258,6 @@ const TicketsListKanban = () => {
 
   return (
     <div style={styles.page}>
-      
       <div style={styles.topHeader}>
         <div>
           <h2 style={styles.mainTitle}>Tableau de Bord Kanban - Support</h2>
@@ -222,7 +272,6 @@ const TicketsListKanban = () => {
         </div>
       )}
 
-      {/* SURFACE DU KANBAN BASÉE SUR LES STATUTS DE SQLITE */}
       <div style={styles.kanbanBoard}>
         {kanbanStatuses.map(column => {
           const columnTickets = tickets.filter(t => parseInt(t.status, 10) === column.id);
@@ -260,19 +309,62 @@ const TicketsListKanban = () => {
                 )}
               </div>
 
-              <button 
-                onClick={() => openCreateModalForColumn(column.id)} 
-                style={{ ...styles.addTicketColumnBtn, border: `1px dashed ${column.border}`, color: column.color }}
-              >
-                ＋ Ajouter ({column.label})
-              </button>
+              {column.id === 1 && (
+                <button 
+                  onClick={() => openCreateModalForColumn(column.id)} 
+                  style={{ ...styles.addTicketColumnBtn, border: `1px dashed ${column.border}`, color: column.color }}
+                >
+                  ＋ Ajouter ({column.label})
+                </button>
+              )}
             </div>
           );
         })}
       </div>
 
+      {/* MODAL DE SÉLECTION DU TECHNICIEN (LISTE DÉROULANTE) */}
+      {isTechModalOpen && (
+        <div style={styles.modalOverlay}>
+          <div style={{ ...styles.modalContent, maxWidth: '450px' }}>
+            <form onSubmit={handleTechSelectSubmit}>
+              <div style={styles.modalHeader}>
+                <div>
+                  <span style={styles.cardMetaTag}>Attribution Responsable</span>
+                  <h3 style={styles.modalTitle}>Assigner un technicien</h3>
+                </div>
+              </div>
+              <div style={styles.modalBody}>
+                <div style={styles.formGroup}>
+                  <label style={styles.formLabel}>Choisir dans la liste des techniciens GLPI :</label>
+                  <select 
+                    value={selectedTechId} 
+                    onChange={(e) => setSelectedTechId(e.target.value)} 
+                    style={styles.formSelect}
+                    required
+                  >
+                    {technicians.map(tech => (
+                      <option key={tech.id} value={tech.id}>
+                        {tech.name} (ID: {tech.id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div style={styles.modalFooter}>
+                <button type="button" style={styles.btnCloseModal} onClick={() => setIsTechModalOpen(false)}>
+                  Annuler l'attribution
+                </button>
+                <button type="submit" style={styles.btnSubmitActive}>
+                  Confirmer et Assigner
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* MODAL CRÉATION TICKET */}
-      {isCreateModalOpen && (
+      {isCreateModalOpen &&  (
         <div style={styles.modalOverlay} onClick={() => setIsCreateModalOpen(false)}>
           <div style={{ ...styles.modalContent, maxWidth: '550px' }} onClick={(e) => e.stopPropagation()}>
             <form onSubmit={handleCreateSubmit}>
@@ -305,7 +397,7 @@ const TicketsListKanban = () => {
                   </div>
                   <div style={styles.formGroup}>
                     <label style={styles.formLabel}>Niveau d'urgence</label>
-                    <select value={newTicket.urgency} onChange={(e) => setNewTicket(prev => ({ ...prev, priority: e.target.value }))} style={styles.formSelect}>
+                    <select value={newTicket.urgency} onChange={(e) => setNewTicket(prev => ({ ...prev, urgency: e.target.value }))} style={styles.formSelect}>
                       <option value="1">1 - Très Basse</option>
                       <option value="2">2 - Basse</option>
                       <option value="3">3 - Moyenne</option>
@@ -349,9 +441,8 @@ const TicketsListKanban = () => {
               </span>
             </div>
             <div style={styles.modalBody}>
-              {/* Reste du tiroir inchangé */}
               <div style={styles.sectionBlock}>
-                <label style={styles.sectionTitle}>Description</label>
+                <label style={styles.sectionTitle}>Description & Historique</label>
                 <div style={styles.descriptionBox} dangerouslySetInnerHTML={{ __html: selectedTicket.content }} />
               </div>
             </div>
@@ -366,7 +457,6 @@ const TicketsListKanban = () => {
   );
 };
 
-// Styles inchangés (utilisant CSS Grid 3 colonnes comme validé précédemment)
 const styles = {
   loadingContainer: { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#121212' },
   loadingText: { color: '#00d2ff', fontSize: '14px', fontFamily: 'monospace' },
