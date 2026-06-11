@@ -133,7 +133,7 @@ const TicketsListKanban = () => {
     if (!draggedTicket || parseInt(draggedTicket.status, 10) === targetStatusId) return;
 
     let resolutionComment = "";
-    if (targetStatusId === 5) {
+    if (targetStatusId === 6) {
       resolutionComment = window.prompt(
         ` Clôture technique de l'incident #${ticketId}\nVeuillez saisir le rapport de résolution ou la justification de fermeture :`
       );
