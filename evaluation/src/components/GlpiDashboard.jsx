@@ -7,7 +7,8 @@ const GlpiDashboard = () => {
 
   const [itemStats, setItemStats] = useState({
     total: 0,
-    byType: { Computer: 0, Monitor: 0, Phone: 0}
+    // CORRECTION : Utilisation de la casse et des types exacts de l'API GLPI
+    byType: { Computer: 0, Monitor: 0, Phone: 0 }
   });
 
   const [ticketStats, setTicketStats] = useState({
@@ -23,6 +24,7 @@ const GlpiDashboard = () => {
     setLoading(true);
     setError(null);
     try {
+      // Les endpoints GLPI valides correspondants à votre parc
       const itemTypes = ['Computer', 'Monitor', 'Phone'];
       const itemPromises = itemTypes.map(async (type) => {
         try {
@@ -36,7 +38,8 @@ const GlpiDashboard = () => {
       const itemResults = await Promise.all(itemPromises);
       
       let totalItemsCount = 0;
-      const itemsByType = {};
+      const itemsByType = { Computer: 0, Monitor: 0, Phone: 0 };
+      
       itemResults.forEach(res => {
         itemsByType[res.type] = res.count;
         totalItemsCount += res.count;
@@ -99,9 +102,8 @@ const GlpiDashboard = () => {
 
   const itemTypeConfig = {
     Computer: { label: 'Ordinateurs', color: '#00d2ff' },
-    Monitor: { label: 'Ecrans', color: '#38bdf8' },
-    NetworkEquipment: { label: 'Materiels Reseau', color: '#0ea5e9' },
-    Peripheral: { label: 'Peripheriques', color: '#0284c7' }
+    Monitor: { label: 'Écrans', color: '#38bdf8' },
+    Phone: { label: 'Téléphones', color: '#0ea5e9' }
   };
 
   return (
@@ -111,7 +113,7 @@ const GlpiDashboard = () => {
       <div style={styles.header}>
         <div>
           <h2 style={styles.mainTitle}>Tableau de Bord Analytique</h2>
-          <p style={styles.subtitle}>Vue generale des actifs du parc informatique et de la distribution des flux d'assistance.</p>
+          <p style={styles.subtitle}>Vue générale des actifs du parc informatique et de la distribution des flux d'assistance.</p>
         </div>
         <button onClick={loadDashboardData} style={styles.refreshBtn}>
           Actualiser les indicateurs
@@ -123,7 +125,7 @@ const GlpiDashboard = () => {
         
         {/* KPI Eléments Globaux */}
         <div style={{ ...styles.kpiCard, borderLeft: '4px solid #00d2ff' }}>
-          <div style={styles.kpiLabel}>Elements Globaux du Parc</div>
+          <div style={styles.kpiLabel}>Éléments Globaux du Parc</div>
           <div style={styles.kpiValueRow}>
             <span style={styles.kpiNumber}>{itemStats.total}</span>
             <span style={styles.kpiBadge}>Actifs</span>
@@ -146,7 +148,7 @@ const GlpiDashboard = () => {
         
         {/* Bloc Repartition du Parc */}
         <div style={styles.contentCard}>
-          <h3 style={styles.cardTitle}>Repartition Sommaire du Parc</h3>
+          <h3 style={styles.cardTitle}>Répartition Sommaire du Parc</h3>
           <div style={styles.itemDistributionList}>
             {Object.keys(itemStats.byType).map(type => {
               const config = itemTypeConfig[type] || { label: type, color: '#cbd5e1' };
@@ -179,7 +181,7 @@ const GlpiDashboard = () => {
             <div style={styles.ticketRowIncident}>
               <div style={styles.ticketMeta}>
                 <div style={styles.ticketMainLabel}>Incidents</div>
-                <div style={styles.ticketSubLabel}>Dysfonctionnements et pannes materielles</div>
+                <div style={styles.ticketSubLabel}>Dysfonctionnements et pannes matérielles</div>
               </div>
               <span style={styles.ticketCounterIncident}>{ticketStats.byType.Incident}</span>
             </div>
@@ -188,7 +190,7 @@ const GlpiDashboard = () => {
             <div style={styles.ticketRowRequest}>
               <div style={styles.ticketMeta}>
                 <div style={styles.ticketMainLabelRequest}>Demandes de Service</div>
-                <div style={styles.ticketSubLabel}>Besoins d'acces, dotations ou installations</div>
+                <div style={styles.ticketSubLabel}>Besoins d'accès, dotations ou installations</div>
               </div>
               <span style={styles.ticketCounterRequest}>{ticketStats.byType.Request}</span>
             </div>
@@ -223,7 +225,7 @@ const styles = {
   cardTitle: { margin: '0 0 20px 0', fontSize: '16px', fontWeight: '700', color: '#cbd5e1', borderBottom: '1px solid #334155', paddingBottom: '12px' },
   itemDistributionList: { display: 'flex', flexDirection: 'column', gap: '18px' },
   distributionRow: { display: 'flex', flexDirection: 'column', gap: '8px' },
-  rowMetadata: { display: 'flex', justifycontent: 'space-between', display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: '600' },
+  rowMetadata: { display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: '600' },
   rowLabel: { color: '#cbd5e1' },
   rowValue: { color: '#f8fafc' },
   rowPercentage: { fontWeight: '400', color: '#64748b', fontSize: '12px', marginLeft: '4px' },

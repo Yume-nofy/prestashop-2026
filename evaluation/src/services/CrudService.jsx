@@ -193,13 +193,14 @@ export const deleteGlpiStatus = async (statusType, id) => {
 };
 export const getGlpiItems = async (itemType) => {
   try {
-    const response = await apiGlpi(itemType, { method: 'GET' });
+    const response = await apiGlpi(`${itemType}?range=0-500`, { method: 'GET' });
     return response;
   } catch (error) {
     console.error(`Erreur GET sur le matériel ${itemType} :`, error);
     throw error;
   }
 };
+
 export const deleteGlpiItem = async (itemType, id) => {
   try {
     const payload = {
@@ -399,7 +400,7 @@ export const purgeAllGlpiTickets = async (onProgressLog) => {
     let hasMoreTickets = true;
 
     while (hasMoreTickets) {
-      const response = await apiGlpi('Ticket?range=0-100', {
+      const response = await apiGlpi('Ticket?range=0-500', {
         method: 'GET'
       });
 
@@ -497,7 +498,7 @@ export const linkDocumentToItem = async (documentId, itemType, itemId) => {
   }
 };
 export const fetchGlpiItems = async (itemType) => {
-  return await apiGlpi(itemType);
+  return await apiGlpi(`${itemType}?range=0-1000`);
 };
 export const fetchGlpiDocumentItems = async () => {
   return await apiGlpi('Document_Item');
