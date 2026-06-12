@@ -232,7 +232,7 @@ const CsvDynamicTester = () => {
             const realType = await checkRealImageType(fileData);
 
             if (!realType.valid) {
-              addLog(`   ❌ Rejet : Le fichier "${fileNameWithExt}" contient des entêtes binaires corrompus ou invalides (Renommage suspect détecté).`);
+              addLog(`Rejet : Le fichier "${fileNameWithExt}" contient des entêtes binaires corrompus ou invalides (Renommage suspect détecté).`);
               continue;
             }
 

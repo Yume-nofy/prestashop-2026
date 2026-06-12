@@ -82,9 +82,9 @@ const StatusConfigPage = () => {
           <p style={styles.subtitle}>Modifiez librement la couleur ou les traductions de vos colonnes.</p>
         </div>
         
-        {/* 🌟 ZONE DES BOUTONS DE LANGUE */}
+        {/*  ZONE DES BOUTONS DE LANGUE */}
         <div style={styles.langSelectorContainer}>
-          <span style={styles.langLabel}>Langue active :</span>
+          {/* <span style={styles.langLabel}>Langue active :</span>
           <button 
             onClick={() => handleLangChange('fr')} 
             style={currentLang === 'fr' ? styles.btnLangActive : styles.btnLangInactive}
@@ -96,7 +96,7 @@ const StatusConfigPage = () => {
             style={currentLang === 'mg' ? styles.btnLangActive : styles.btnLangInactive}
           >
             Malagasy
-          </button>
+          </button> */}
         </div>
       </div>
 
