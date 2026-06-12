@@ -198,26 +198,44 @@ const CsvDynamicTester = () => {
         }));
       }
 
-      addLog("Création des équipements...");
-      for (const type in devicesData.devicesByType) {
-        await Promise.all(devicesData.devicesByType[type].map(async (device) => {
-          const details = {
-            name: device.name,
-            statusId: statusMap[device.statusName],
-            groupId: groupMap[device.locationName],
-            manufacturerId: manufacturerMap[device.manufacturerName],
-            modelId: modelMap[`${type}_${device.modelName}`],
-            inventoryNumber: device.inventoryNumber,
-            userId: userMap[device.userEmailOrName] || 0 
-          };
-          
-          const res = await createDetailedGlpiItem(type, details);
-          if (res && res.id) {
-            const glpiCorrectType = type.charAt(0).toUpperCase() + type.slice(1);
-            createdDevicesMap[device.name] = { id: res.id, type: glpiCorrectType };
-          }
-        }));
+      addLog("Dédoublonnage et création des équipements uniques...");
+for (const type in devicesData.devicesByType) {
+  // 1. Utilisation d'un dictionnaire pour écraser les doublons du CSV par leur nom
+  const uniqueDevices = {};
+  
+  devicesData.devicesByType[type].forEach(device => {
+    const cleanName = device.name.trim();
+    if (!cleanName) return;
+    
+    // Si l'équipement apparaît plusieurs fois, la dernière ligne lue met à jour les infos
+    uniqueDevices[cleanName] = {
+      name: cleanName,
+      statusId: statusMap[device.statusName],
+      groupId: groupMap[device.locationName],
+      manufacturerId: manufacturerMap[device.manufacturerName],
+      modelId: modelMap[`${type}_${device.modelName}`],
+      inventoryNumber: device.inventoryNumber,
+      userId: userMap[device.userEmailOrName] || 0 
+    };
+  });
+
+  // 2. Transformation du dictionnaire en tableau d'éléments uniques
+  const devicesToCreate = Object.values(uniqueDevices);
+  addLog(`   -> [${type}] : ${devicesToCreate.length} équipement(s) unique(s) trouvé(s) sur ${devicesData.devicesByType[type].length} lignes.`);
+
+  // 3. Envoi sécurisé des requêtes uniques à GLPI
+  await Promise.all(devicesToCreate.map(async (details) => {
+    try {
+      const res = await createDetailedGlpiItem(type, details);
+      if (res && res.id) {
+        const glpiCorrectType = type.charAt(0).toUpperCase() + type.slice(1);
+        createdDevicesMap[details.name] = { id: res.id, type: glpiCorrectType };
       }
+    } catch (deviceErr) {
+      addLog(`   ❌ Échec de création du matériel [${details.name}] : ${deviceErr.message}`);
+    }
+  }));
+}
 
       //  GESTION DU ZIP & SÉCURISATION BINAIRE DES IMAGES
       if (zipFile && Object.keys(createdDevicesMap).length > 0) {

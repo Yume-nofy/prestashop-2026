@@ -80,7 +80,7 @@ export function useCsvParser({ separator = ',', hasHeader = true }) {
           const line = lines[i].trim();
           if (!line) continue;
 
-          const fields = line.split(separator).map(field => field.trim());
+          const fields = splitCsvLine(line).map(field => field.trim());
           const [name, status, location, manufacturer, itemType, model, inventoryNumber, user] = fields;
 
           if (!name) continue;
