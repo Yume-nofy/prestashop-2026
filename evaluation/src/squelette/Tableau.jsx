@@ -14,7 +14,32 @@ const TableauSquelette = () => {
     'Superviseur': { color: '#a855f7', bg: 'rgba(168, 85, 247, 0.08)', border: '#a855f7' },
     'Technicien': { color: '#38bdf8', bg: 'rgba(56, 189, 248, 0.08)', border: '#38bdf8' }
   };
+  const fetchAndGroupUsers = async () => {
+  try {
+    const rawLinks = await getGlpiUsersByGroup();
+    
+    const grouped = rawLinks.reduce((acc, link) => {
+      const groupName = link.groupname || `Groupe ID ${link.groups_id}`;
+      
+      if (!acc[groupName]) {
+        acc[groupName] = [];
+      }
+      
+      acc[groupName].push({
+        id: link.users_id,
+        name: link.completename ? link.completename.split(' > ').pop() : `User ID ${link.users_id}`
+      });
+      
+      return acc;
+    }, {});
 
+    console.log("Résultat du regroupement via l'API :", grouped);
+    return grouped;
+
+  } catch (error) {
+    console.error("Impossible de regrouper les utilisateurs :", error);
+  }
+};
   return (
     <div style={styles.container}>
       {/* En-tête du module */}

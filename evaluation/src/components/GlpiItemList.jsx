@@ -50,7 +50,7 @@ const GlpiItemList = () => {
       }
 
       // 2. Récupération des éléments du parc matériel
-      const typesToFetch = ['Computer', 'Monitor', 'NetworkEquipment', 'Peripheral']; 
+      const typesToFetch = ['Computer', 'Monitor', 'Phone']; 
       const itemsPromises = typesToFetch.map(async (type) => {
         try {
           const res = await fetchGlpiItems(type);

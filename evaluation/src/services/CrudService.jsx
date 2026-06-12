@@ -557,7 +557,37 @@ export const getGlpiDocuments = async () => {
 export const deleteGlpiDocument = async (id) => {
   return await apiGlpi(`Document/${id}`, { method: 'DELETE' });
 };
+export const updateGlpiTicketStatus = async (ticketId, statusId) => {
+  try {
+    const payload = {
+      input: {
+        id: Number(ticketId),
+        status: Number(statusId)
+      }
+    };
 
+    const response = await apiGlpi(`Ticket/${ticketId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+
+    return response;
+  } catch (error) {
+    console.error(`Erreur lors de la mise à jour du statut pour le ticket #${ticketId} :`, error);
+    throw error;
+  }
+};
 export const getGlpiDocumentItems = async () => {
   return await apiGlpi('Document_Item');
+};
+export const getGlpiUsersByGroup = async () => {
+  try {
+    const response = await apiGlpi('Group_User?expand_dropdowns=true&range=0-1000', {
+      method: 'GET'
+    });
+    return response;
+  } catch (error) {
+    console.error("Erreur lors de la récupération des liaisons Group_User :", error);
+    throw error;
+  }
 };

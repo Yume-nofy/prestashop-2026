@@ -12,9 +12,26 @@ import {
   addUserProfileAndEntity,
   addGlpiTicketCost, 
   uploadGlpiDocument, 
-  linkDocumentToItem
+  linkDocumentToItem,
+  updateGlpiTicketStatus
 } from '../services/CrudService';
 import { getGlpiUserId, createGlpiUser, linkUserToGroup } from '../services/testApi';
+
+// Fonction d'aide pour convertir le statut textuel du CSV en ID numérique GLPI
+const mapStatusToGlpiId = (statusStr) => {
+  // On nettoie les espaces et on passe en minuscules pour matcher tous les formats (ex: "In Progress" -> "inprogress")
+  const cleanStatus = String(statusStr).trim().toLowerCase().replace(/\s+/g, '');
+  
+  switch (cleanStatus) {
+    case 'new': case 'nouveau': case 'incoming': return 1;
+    case 'processing': case 'encours': case 'inprogress': return 2;
+    case 'planned': case 'planifie': case 'accepted': return 3;
+    case 'pending': case 'enattente': return 4;
+    case 'solved': case 'resolu': return 5;
+    case 'closed': case 'clos': return 6;
+    default: return 1;
+  }
+};
 
 /**
  * Détection des "Magic Numbers" (Signatures Binaires)
@@ -255,7 +272,7 @@ const CsvDynamicTester = () => {
       }
 
       if (ticketData && ticketData.length > 0) {
-        addLog(`Traitement de ${ticketData.length} ticket(s) avec analyse ligne par ligne des coûts...`);
+        addLog(`Traitement de ${ticketData.length} ticket(s) avec cycle de vie sécurisé (Injection -> Clôture)...`);
 
         for (const ticket of ticketData) {
           try {
@@ -266,7 +283,7 @@ const CsvDynamicTester = () => {
             const csvDesc = ticket.description || "";
             const csvType = ticket.type || "Incident";
             const csvPriority = ticket.priority || "Medium";
-            const csvStatus = ticket.status || "New";
+            const csvStatusReal = ticket.status || "New"; 
 
             if (!csvRef || csvRef === "undefined" || csvRef === "") {
               continue; 
@@ -283,12 +300,13 @@ const CsvDynamicTester = () => {
             const matchedCostRows = costData.filter(c => String(c.tickets_id).trim() === csvRef);
             const totalDurationSeconds = matchedCostRows.reduce((sum, row) => sum + (parseInt(row.actiontime, 10) || 0), 0);
 
+            // 1. CRÉATION FORCEE EN STATUT "NOUVEAU" (ID 1)
             const ticketRes = await createGlpiTicket({
               title: csvTitle,
               description: csvDesc,
               type: csvType,
               priority: csvPriority,
-              status: csvStatus,
+              status: "New", 
               fullDateTime: finalGlpiDateTime,
               duration: totalDurationSeconds, 
               externalRef: csvRef
@@ -297,8 +315,9 @@ const CsvDynamicTester = () => {
             const newTicketId = ticketRes.id;
             
             if (newTicketId) {
-              addLog(`Ticket #${newTicketId} créé (Ref CSV: ${csvRef}) | Durée Globale: ${totalDurationSeconds}s`);
+              addLog(`Ticket #${newTicketId} initialisé au statut [NOUVEAU] (Ref CSV: ${csvRef})`);
 
+              // 2. INJECTION DES SEGMENTS FINANCIERS
               if (matchedCostRows.length > 0) {
                 for (const row of matchedCostRows) {
                   const fCost = parseFloat(row.cost_fixed) || 0.00;
@@ -307,11 +326,12 @@ const CsvDynamicTester = () => {
 
                   if (fCost > 0 || tCost > 0 || duration > 0) {
                     await addGlpiTicketCost(newTicketId, fCost, tCost, duration);
-                    addLog(`   -> Segment financier injecté | Fixe: ${fCost} | Horaire: ${tCost} | Durée: ${duration}s`);
+                    addLog(`   -> Segment financier rattaché (${duration}s)`);
                   }
                 }
               }
 
+              // 3. LIAISON DES ÉQUIPEMENTS
               let itemsArray = ticket.items || [];
               if (itemsArray.length > 0) {
                 for (const itemName of itemsArray) {
@@ -322,6 +342,16 @@ const CsvDynamicTester = () => {
                   }
                 }
               }
+
+            const finalStatusId = mapStatusToGlpiId(csvStatusReal);
+            if (finalStatusId !== 1) {
+              try {
+                await updateGlpiTicketStatus(newTicketId, finalStatusId);
+                addLog(`   -> Cycle finalisé avec succès vers le statut : [${csvStatusReal.toUpperCase()}]`);
+              } catch (putError) {
+                addLog(`   ⚠️ Impossible d'appliquer le statut final au ticket #${newTicketId} : ${putError.message}`);
+              }
+            }
             }
 
           } catch (ticketError) {
