@@ -7,7 +7,7 @@ const GlpiDashboard = () => {
 
   const [itemStats, setItemStats] = useState({
     total: 0,
-    byType: { Computer: 0, Monitor: 0, NetworkEquipment: 0, Peripheral: 0 }
+    byType: { Computer: 0, Monitor: 0, Phone: 0}
   });
 
   const [ticketStats, setTicketStats] = useState({
@@ -23,7 +23,7 @@ const GlpiDashboard = () => {
     setLoading(true);
     setError(null);
     try {
-      const itemTypes = ['Computer', 'Monitor', 'NetworkEquipment', 'Peripheral'];
+      const itemTypes = ['Computer', 'Monitor', 'Phone'];
       const itemPromises = itemTypes.map(async (type) => {
         try {
           const res = await fetchGlpiItems(type);

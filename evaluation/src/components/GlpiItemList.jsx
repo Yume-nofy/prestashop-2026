@@ -14,7 +14,7 @@ const GlpiItemList = () => {
   const [selectedManufacturer, setSelectedManufacturer] = useState('');
 
   // Listes de filtres uniques (Textuels)
-  const [typesList] = useState(['Computer', 'Monitor', 'NetworkEquipment', 'Peripheral']);
+  const [typesList] = useState(['Computer', 'Monitor', 'Phone']);
   const [statusesList, setStatusesList] = useState([]);
   const [manufacturersList, setManufacturersList] = useState([]);
 

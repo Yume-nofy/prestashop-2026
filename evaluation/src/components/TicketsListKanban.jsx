@@ -310,11 +310,12 @@ const TicketsListKanban = () => {
               </div>
 
               {column.id === 1 && (
-                <button 
+                <button                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  utton 
                   onClick={() => openCreateModalForColumn(column.id)} 
                   style={{ ...styles.addTicketColumnBtn, border: `1px dashed ${column.border}`, color: column.color }}
                 >
                   ＋ Ajouter ({column.label})
+                
                 </button>
               )}
             </div>
