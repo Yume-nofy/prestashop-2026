@@ -47,16 +47,21 @@ const TicketsList = () => {
       setAllLinks(Array.isArray(linksRes) ? linksRes : []);
       setAllCosts(Array.isArray(costsRes) ? costsRes : []);
       const localStatuses = await apiLocalStatus(`status?lang=${CURRENT_LANG}`);
-            const formattedStatuses = localStatuses.map(status => ({
-              id: status.id, 
-              label: status.name,
-              color: status.couleur,
-              border: status.couleur,
-              bg: status.couleur.startsWith('#') ? `${status.couleur}0D` : 'rgba(0, 210, 255, 0.05)' 
-            }));
-      
+
+              const formattedStatuses = {};
+              localStatuses.forEach(status => {
+                formattedStatuses[status.id] = {
+                  id: status.id, 
+                  label: status.name,
+                  color: status.couleur,
+                  border: status.couleur,
+                  bg: status.couleur.startsWith('#') ? `${status.couleur}0D` : 'rgba(0, 210, 255, 0.05)' 
+                };
+              });
+
             setKanbanStatuses(formattedStatuses);
-            
+
+            console.log("kanbastatues",kanbanStatuses);
             
             
 
@@ -67,7 +72,9 @@ const TicketsList = () => {
       setLoading(false);
     }
   };
-
+useEffect(() => {
+  console.log("KanbanStatuses a changé et vaut maintenant :", kanbanStatuses);
+}, [kanbanStatuses]);
   const handleDelete = async (ticketId) => {
     if (!window.confirm(`Confirmez-vous la suppression définitive du ticket #${ticketId} ?`)) return;
     
@@ -146,37 +153,48 @@ const TicketsList = () => {
               </thead>
               <tbody>
                 {tickets.map(ticket => {
-                  const status = kanbanStatuses[ticket.status] ;
-    
-                  const isSelected = selectedTicket?.id === ticket.id;
+  // Recherche d'abord dans l'API, sinon dans la config locale, sinon un fallback neutre
+  const status = kanbanStatuses[ticket.status] || statusConfig[ticket.status] || {
+    label: `Statut ${ticket.status}`,
+    color: '#94a3b8',
+    bg: 'rgba(148, 163, 184, 0.1)',
+    border: '#334155'
+  };
 
-                  return (
-                    <tr 
-                      key={ticket.id} 
-                      onClick={() => {
-                        setSelectedTicket(ticket);
-                        setIsModalOpen(false);
-                      }}
-                      style={{ 
-                        ...styles.tr,
-                        backgroundColor: isSelected ? 'rgba(0, 210, 255, 0.04)' : 'transparent',
-                        borderColor: isSelected ? '#00d2ff' : '#1e1e1e'
-                      }}
-                    >
-                      <td style={styles.tdId}>#{ticket.id}</td>
-                      <td style={styles.tdContent}>
-                        <div style={styles.ticketName} title={ticket.name}>{ticket.name}</div>
-                        <span style={styles.ticketTypeLabel}>{typeLabels[ticket.type] || 'Ticket'}</span>
-                      </td>
-                      <td style={styles.td}>
-                        <span style={{ backgroundColor: status.bg, color: status.color, border: `1px solid ${status.border}`, ...styles.statusBadge }}>
-                          {status.label}
-                        </span>
-                      </td>
-                      <td style={styles.tdUrgency}>{priorityLabels[ticket.urgency] || 'Moyenne'}</td>
-                    </tr>
-                  );
-                })}
+  const isSelected = selectedTicket?.id === ticket.id;
+
+  return (
+    <tr 
+      key={ticket.id} 
+      onClick={() => {
+        setSelectedTicket(ticket);
+        setIsModalOpen(false);
+      }}
+      style={{ 
+        ...styles.tr,
+        backgroundColor: isSelected ? 'rgba(0, 210, 255, 0.04)' : 'transparent',
+        borderColor: isSelected ? '#00d2ff' : '#1e1e1e'
+      }}
+    >
+      <td style={styles.tdId}>#{ticket.id}</td>
+      <td style={styles.tdContent}>
+        <div style={styles.ticketName} title={ticket.name}>{ticket.name}</div>
+        <span style={styles.ticketTypeLabel}>{typeLabels[ticket.type] || 'Ticket'}</span>
+      </td>
+      <td style={styles.td}>
+        <span style={{ 
+          backgroundColor: status.bg, 
+          color: status.color, 
+          border: `1px solid ${status.border}`, 
+          ...styles.statusBadge 
+        }}>
+          {status.label}
+        </span>
+      </td>
+      <td style={styles.tdUrgency}>{priorityLabels[ticket.urgency] || 'Moyenne'}</td>
+    </tr>
+  );
+})}
               </tbody>
             </table>
           </div>
@@ -380,7 +398,7 @@ const styles = {
   alertSuccess: { padding: '12px 16px', borderRadius: '6px', marginBottom: '20px', fontSize: '13px', fontWeight: '600', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid #10b981', color: '#10b981' },
   alertError: { padding: '12px 16px', borderRadius: '6px', marginBottom: '20px', fontSize: '13px', fontWeight: '600', backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444' },
   layoutGrid: { display: 'flex', width: '100%', gap: '24px', alignItems: 'flex-start' },
-  leftColumn: { width: '55%', flexShrink: 0 },
+  leftColumn: { width: '80%', flexShrink: 0 },
   rightColumn: { width: '45%', flexGrow: 1, position: 'sticky', top: '20px' },
   tableWrapper: { backgroundColor: '#1e1e1e', border: '1px solid #334155', borderRadius: '8px', overflow: 'hidden' },
   table: { width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' },
