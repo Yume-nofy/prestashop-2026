@@ -29,7 +29,6 @@ ordre de reinitilisation:
     entités (en dernier)
 
 
-
    get /Administration/Group  : [
   {
     "id": 0,
@@ -95,3 +94,7 @@ delete:
   "id": 0,
   "href": "string"
 }
+
+rehefa mamadika kanban makany terminer -> bar de dialogue->cout vaovao atao anaty sqlite(superCost)
+page vaovao->resaka cout,list item avec cout,avec le cout vaovao(superCost)
+pc,monitor,phone 

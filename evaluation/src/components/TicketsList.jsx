@@ -107,9 +107,16 @@ useEffect(() => {
     const material = parseFloat(item.cost_material) || 0;
     const time = parseFloat(item.cost_time) || 0;
     const minutes = parseInt(item.actiontime, 10) || 0;
-    return sum + fixed + material + (time * (minutes / 60));
+    console.log(minutes);
+    let ok=0;
+    if(time==0){
+      ok=0;
+    }else{
+      ok=(minutes/60)/time;
+    }
+    return sum + fixed + material + ok;
   }, 0);
-
+console.log("ticket",ticketCosts);
   if (loading) {
     return (
       <div style={styles.loadingContainer}>

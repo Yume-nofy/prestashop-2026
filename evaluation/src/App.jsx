@@ -20,6 +20,7 @@ import FrontOfficeLayout from './components/FrontOfficeLayout';
 import ResetData from './components/ResetData';
 import TicketsListKanban from './components/TicketsListKanban';
 import StatusConfigPage from './components/StatusConfigPage';
+import TicketsCost from './components/TicketsCost';
 
 const Login = () => {
   const navigate = useNavigate(); 
@@ -61,6 +62,9 @@ const router = createBrowserRouter([
   {
     path: '/',
     element: <Home />
+  },{
+    path: '/cost',
+    element: <TicketsCost />
   },
   {
     path: '/login',

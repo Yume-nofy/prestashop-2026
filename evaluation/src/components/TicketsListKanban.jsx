@@ -5,13 +5,15 @@ import { apiLocalStatus } from '../api/configApi';
 
 const TicketsListKanban = () => {
   const [tickets, setTickets] = useState([]);
+  const [news,setNews] = useState([]);
   const [kanbanStatuses, setKanbanStatuses] = useState([]); 
   const [technicians, setTechnicians] = useState([]); 
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [VAleur,setVAleur]=useState(0);
   const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
-
+  const [ticketDetail,setTicketDetails]= useState([]);
   const [allLinks, setAllLinks] = useState([]);
   const [allCosts, setAllCosts] = useState([]);
   
@@ -22,6 +24,15 @@ const TicketsListKanban = () => {
   const [isTechModalOpen, setIsTechModalOpen] = useState(false);
   const [selectedTechId, setSelectedTechId] = useState('');
   const [pendingDropData, setPendingDropData] = useState(null);
+
+  // ÉTATS POUR LES POPUPS DE JUSTIFICATION (REMPLACEMENT WINDOW.PROMPT)
+  const [isActionModalOpen, setIsActionModalOpen] = useState(false);
+  const [actionModalConfig, setActionModalConfig] = useState({ title: '', label: '', ticketId: null, targetStatusId: null, currentStatusId: null, draggedTicket: null, technicianId: null });
+  const [actionReason, setActionReason] = useState({
+    cost: '',
+    category: '',
+    comment: ''
+  });
 
   const [newTicket, setNewTicket] = useState({
     name: '',
@@ -77,7 +88,7 @@ const TicketsListKanban = () => {
 
       const cleanUsers = Array.isArray(usersRes) ? usersRes : [];
       setTechnicians(cleanUsers.map(u => ({ id: u.id, name: u.name || u.realname || u.name })));
-
+      
     } catch (err) {
       console.error("Erreur d'initialisation Kanban:", err);
       setMessage({ text: "Impossible de charger le flux ou les configurations.", type: 'error' });
@@ -93,12 +104,72 @@ const TicketsListKanban = () => {
   const handleDragOver = (e) => {
     e.preventDefault();
   };
+const Annuler = async (e, ticketId) => {
+  e.preventDefault();
+  try {
+    // Suppression des coûts locaux pour ce ticket
+    await apiLocalStatus(`cost/${ticketId}`, {
+      method: 'DELETE'
+    });
+    
+    // Poursuite du flux GLPI
+    const { targetStatusId, currentStatusId, draggedTicket, technicianId } = actionModalConfig;
+    processTicketUpdate(ticketId, targetStatusId, currentStatusId, draggedTicket, technicianId);
+  } catch (err) {
+    console.error("Erreur lors de l'annulation du coût :", err);
+  }
+}; 
 
+const reouverturAnnuler = async (e) => {
+  e.preventDefault();
+  
+  try {
+    if (news && news.item) {
+      for (let listItem of news.item) {
+        const url = `costLast?itemtype=${listItem.item_id}&id_ticket=${news.idTicket}`;
+        const localStatuses = await apiLocalStatus(url);
+        
+        const lastCost = (localStatuses && localStatuses.length > 0) ? localStatuses[0].cost : 0;
+        
+        let valiny = (lastCost * Number(VAleur)) / 100;
+        
+        let editingStatus = { 
+          item_id: listItem.item_id,
+          cost: valiny || 0,
+          ticket_id: news.idTicket
+        };
+        
+        await apiLocalStatus('costPrix', {
+          method: 'POST',
+          body: JSON.stringify(editingStatus)
+        });
+      }
+    }
+    
+    setVAleur(0);
+    
+    const { ticketId, targetStatusId, currentStatusId, draggedTicket, technicianId } = actionModalConfig;
+    processTicketUpdate(ticketId, targetStatusId, currentStatusId, draggedTicket, technicianId);
+    
+  } catch (err) {
+    console.error("Erreur lors du recalcul de réouverture :", err);
+  }
+};
   const handleDrop = async (e, targetStatusId) => {
     e.preventDefault();
     const ticketId = parseInt(e.dataTransfer.getData('text/plain'), 10);
     
     const draggedTicket = tickets.find(t => t.id === ticketId);
+    const linkedItems = allLinks.filter(item => parseInt(item.tickets_id, 10) === ticketId);
+    const ilaina={idTicket:ticketId,item:[]};
+    for (const links of linkedItems) {
+        let editingStatus = { 
+          item_id: links.itemtype
+        };
+        ilaina.item.push(editingStatus);
+      }
+      console.log("edit",ilaina);
+    setNews(ilaina);
     if (!draggedTicket) return;
 
     const currentStatusId = parseInt(draggedTicket.status, 10);
@@ -110,18 +181,15 @@ const TicketsListKanban = () => {
         alert("Aucun technicien disponible dans le système GLPI.");
         return;
       }
-      // On stocke les informations du drag et on ouvre la modale personnalisée
       setPendingDropData({ ticketId, targetStatusId, currentStatusId, draggedTicket });
       setSelectedTechId(technicians[0]?.id || '');
       setIsTechModalOpen(true);
       return; 
     }
 
-    // Si ce n'est pas une assignation de technicien, on continue vers le traitement standard (ex: clôture)
     processTicketUpdate(ticketId, targetStatusId, currentStatusId, draggedTicket, null);
   };
 
-  // Validation finale après choix du technicien dans la liste déroulante
   const handleTechSelectSubmit = (e) => {
     e.preventDefault();
     if (!selectedTechId) return;
@@ -131,78 +199,117 @@ const TicketsListKanban = () => {
     processTicketUpdate(ticketId, targetStatusId, currentStatusId, draggedTicket, parseInt(selectedTechId, 10));
   };
 
- const processTicketUpdate = async (ticketId, targetStatusId, currentStatusId, draggedTicket, technicianId) => {
-  let updatePayload = { input: { id: ticketId, status: targetStatusId } };
-  let rawComment = ""; // On stocke le commentaire brut ici
-
-  // --- RÈGLE 2 : COMMENTAIRE OBLIGATOIRE DE CLÔTURE OU RÉOUVERTURE ---
-  if (targetStatusId === STATUS_CLOSED) {
-    const reason = window.prompt(`Clôture du ticket #${ticketId}\nVeuillez spécifier le rapport de résolution :`);
-    if (reason === null) return; 
-    if (!reason.trim()) {
-      alert("La justification est obligatoire pour fermer une tâche.");
+  const processTicketUpdate = async (ticketId, targetStatusId, currentStatusId, draggedTicket, technicianId) => {
+    // --- INTERCEPTION POUR LE FORMULAIRE DE CLÔTURE ---
+    if (targetStatusId === STATUS_CLOSED && !actionModalConfig.ticketId) {
+      setActionReason({ cost: '', category: '', comment: '' });
+      setActionModalConfig({
+        title: `Clôture du ticket #${ticketId}`,
+        label: "Informations de clôture :",
+        ticketId, targetStatusId, currentStatusId, draggedTicket, technicianId
+      });
+      setIsActionModalOpen(true);
+      return;
+    } 
+    
+    // --- INTERCEPTION POUR LE FORMULAIRE DE RÉOUVERTURE ---
+    if (currentStatusId === STATUS_CLOSED && targetStatusId !== STATUS_CLOSED && !actionModalConfig.ticketId) {
+      setActionReason({ cost: '', category: '', comment: '' });
+      setActionModalConfig({
+        title: `Réouverture du ticket #${ticketId}`,
+        label: "Raison de la réouverture obligatoire :",
+        ticketId, targetStatusId, currentStatusId, draggedTicket, technicianId
+      });
+      setIsActionModalOpen(true);
       return;
     }
-    rawComment = `<b>[Clôture ticket] :</b> ${reason.trim()}`;
-  } else if (currentStatusId === STATUS_CLOSED && targetStatusId !== STATUS_CLOSED) {
-    const reason = window.prompt(`Réouverture du ticket #${ticketId}\nPourquoi réouvrez-vous cette tâche ? :`);
-    if (reason === null) return;
-    if (!reason.trim()) {
-      alert("La justification est obligatoire pour réouvrir une tâche.");
-      return;
+
+    let updatePayload = { input: { id: ticketId, status: targetStatusId } };
+    let rawComment = ""; 
+    
+    const linkedItems = allLinks.filter(item => parseInt(item.tickets_id, 10) === ticketId);
+
+    // --- TRAITEMENT LOGIQUE SELON L'ACTION COCHÉE ---
+    if (targetStatusId === STATUS_CLOSED) {
+      console.log("Clôture du ticket ID:", ticketId);
+      const chosenCost = Number(actionReason.cost) || 0;
+
+      for (const links of linkedItems) {
+        let editingStatus = { 
+          ticket_id:ticketId,
+          cost:chosenCost/linkedItems.length,
+          item_id:links.itemtype
+        };
+
+        await apiLocalStatus('cost', {
+          method: 'POST',
+          body: JSON.stringify(editingStatus)
+        });
+      }
+      rawComment = `<b>[Clôture ticket] : terminer</b>`;
+
+    } else if (currentStatusId === STATUS_CLOSED && targetStatusId !== STATUS_CLOSED) {
+      console.log("Réouverture du ticket ID:", ticketId);
+      // Récupération sécurisée du commentaire de l'objet
+      const chosenComment = actionReason.comment.trim() || "Aucune raison spécifiée";
+      rawComment = `<b>[Réouverture du ticket] :</b> ${chosenComment}`;
     }
-    rawComment = `<b>[Réouverture du ticket] :</b> ${reason.trim()}`;
-  }
 
-  const previousTickets = [...tickets];
-  
-  // UI Optimiste
-  setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, status: targetStatusId } : t));
+    // --- TRAITEMENT STANDARD DE LA MISE À JOUR ---
+    const previousTickets = [...tickets];
+    setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, status: targetStatusId } : t));
 
-  try {
-    // 1. Mise à jour du statut du Ticket sur GLPI (sans toucher au champ 'content')
-    await apiGlpi(`Ticket/${ticketId}`, {
-      method: 'PUT',
-      body: JSON.stringify(updatePayload)
-    });
-
-    // 2. NOUVEAU : Si un commentaire de réouverture/clôture existe, on l'ajoute comme SUIVI (ITILFollowup)
-    if (rawComment) {
-      await apiGlpi(`Ticket/${ticketId}/ITILFollowup`, {
-        method: 'POST',
-        body: JSON.stringify({
-          input: {
-            items_id: ticketId,
-            itemtype: 'Ticket',
-            content: rawComment, // Le commentaire s'écrira proprement dans l'historique du ticket
-            is_private: 0        // 0 = Public (visible par le demandeur), 1 = Privé
-          }
-        })
+    try {
+      await apiGlpi(`Ticket/${ticketId}`, {
+        method: 'PUT',
+        body: JSON.stringify(updatePayload)
       });
-    }
 
-    // 3. Attribution du technicien choisi depuis la liste si présent
-    if (technicianId) {
-      await apiGlpi(`Ticket/${ticketId}/Ticket_User`, {
-        method: 'POST',
-        body: JSON.stringify({
-          input: {
-            tickets_id: ticketId,
-            users_id: technicianId,
-            type: 2 
-          }
-        })
-      });
-    }
+      if (rawComment) {
+        await apiGlpi(`Ticket/${ticketId}/ITILFollowup`, {
+          method: 'POST',
+          body: JSON.stringify({
+            input: {
+              items_id: ticketId,
+              itemtype: 'Ticket',
+              content: rawComment,
+              is_private: 0        
+            }
+          })
+        });
+      }
 
-    setMessage({ text: `Ticket #${ticketId} mis à jour avec succès.`, type: 'success' });
-    await loadAllTicketsData(); 
-  } catch (err) {
-    setTickets(previousTickets); 
-    console.error(err);
-    setMessage({ text: `Erreur de traitement GLPI : ${err.message}`, type: 'error' });
-  }
-};
+      if (technicianId) {
+        await apiGlpi(`Ticket/${ticketId}/Ticket_User`, {
+          method: 'POST',
+          body: JSON.stringify({
+            input: {
+              tickets_id: ticketId,
+              users_id: technicianId,
+              type: 2 
+            }
+          })
+        });
+      }
+
+      setMessage({ text: `Ticket #${ticketId} mis à jour avec succès.`, type: 'success' });
+      await loadAllTicketsData(); 
+    } catch (err) {
+      setTickets(previousTickets); 
+      console.error(err);
+      setMessage({ text: `Erreur de traitement GLPI : ${err.message}`, type: 'error' });
+    } finally {
+      setIsActionModalOpen(false);
+      setActionModalConfig({ title: '', label: '', ticketId: null, targetStatusId: null, currentStatusId: null, draggedTicket: null, technicianId: null });
+      setActionReason({ cost: '', category: '', comment: '' });
+    }
+  };  
+
+  const handleActionModalSubmit = (e) => {
+    e.preventDefault();
+    const { ticketId, targetStatusId, currentStatusId, draggedTicket, technicianId } = actionModalConfig;
+    processTicketUpdate(ticketId, targetStatusId, currentStatusId, draggedTicket, technicianId);
+  };
 
   const openCreateModalForColumn = (statusId) => {
     setNewTicket({ name: '', content: '', type: '1', urgency: '3', status: statusId });
@@ -227,22 +334,6 @@ const TicketsListKanban = () => {
       await loadAllTicketsData();
     } catch (err) {
       setMessage({ text: `Erreur d'injection : ${err.message}`, type: 'error' });
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleDelete = async (ticketId) => {
-    if (!window.confirm(`Confirmez-vous la suppression définitive du ticket #${ticketId} ?`)) return;
-    setActionLoading(true);
-    try {
-      await deleteGlpiTicket(ticketId);
-      setMessage({ text: `Ticket #${ticketId} purgé avec succès.`, type: 'success' });
-      setSelectedTicket(null);
-      setIsModalOpen(false);
-      await loadAllTicketsData();
-    } catch (err) {
-      setMessage({ text: `Échec de la purge : ${err.message}`, type: 'error' });
     } finally {
       setActionLoading(false);
     }
@@ -310,12 +401,11 @@ const TicketsListKanban = () => {
               </div>
 
               {column.id === 1 && (
-                <button                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  utton 
+                <button 
                   onClick={() => openCreateModalForColumn(column.id)} 
                   style={{ ...styles.addTicketColumnBtn, border: `1px dashed ${column.border}`, color: column.color }}
                 >
                   ＋ Ajouter ({column.label})
-                
                 </button>
               )}
             </div>
@@ -323,7 +413,92 @@ const TicketsListKanban = () => {
         })}
       </div>
 
-      {/* MODAL DE SÉLECTION DU TECHNICIEN (LISTE DÉROULANTE) */}
+      {/* POPUP DE RECOUVREMENT ADAPTATIF (CLÔTURE OU RÉOUVERTURE) */}
+      {isActionModalOpen && (
+        <div style={styles.modalOverlay}>
+          <div style={{ ...styles.modalContent, maxWidth: '450px' }}>
+            <form onSubmit={handleActionModalSubmit}>
+              <div style={styles.modalHeader}>
+                <div>
+                  <span style={styles.cardMetaTag}>Validation Flux Kanban</span>
+                  <h3 style={styles.modalTitle}>{actionModalConfig.title}</h3>
+                </div>
+              </div>
+              
+              <div style={styles.modalBody}>
+                <p style={{ fontSize: '13px', color: '#cbd5e1', marginBottom: '14px' }}>{actionModalConfig.label}</p>
+
+                {/* CHAMP UNIQUE POUR LA CLÔTURE (TARGET = CLOSED) */}
+                {actionModalConfig.targetStatusId === STATUS_CLOSED && (
+                  <div style={styles.formGroup}>
+                    <label style={styles.formLabel}>SuperCost de résolution :</label>
+                    <input 
+                      type="number" 
+                      value={actionReason.cost} 
+                      onChange={(e) => setActionReason(prev => ({ ...prev, cost: e.target.value }))} 
+                      style={styles.formInput}
+                      required
+                      autoFocus
+                    />
+                  </div>
+                )}
+
+                {/* CHAMP UNIQUE POUR LA RÉOUVERTURE (CURRENT = CLOSED) */}
+                {actionModalConfig.currentStatusId === STATUS_CLOSED && (
+                  <div style={styles.formGroup}>
+                    <label style={styles.formLabel}>Justification / Commentaire :</label>
+                    {/* <textarea 
+                      value={actionReason.comment} 
+                      onChange={(e) => setActionReason(prev => ({ ...prev, comment: e.target.value }))} 
+                      style={styles.formTextarea}
+                      rows="4"
+                      placeholder="Indiquez la raison du retour en arrière..."
+                      required
+                      autoFocus
+                    /> */}
+                 <button onClick={(e) => {
+    Annuler(e, news.idTicket);
+    setIsActionModalOpen(false);
+  }}
+>
+  Annuler
+</button>
+
+<input type="number" value={VAleur} onChange={(e) => setVAleur(e.target.value)} />
+
+<button onClick={(e) => {
+    reouverturAnnuler(e); 
+    setIsActionModalOpen(false);
+  }} 
+>
+  Réouverture
+</button>
+                  </div>
+                )}
+              </div>
+
+              <div style={styles.modalFooter}>
+                <button 
+                  type="button" 
+                  style={styles.btnCloseModal} 
+                  onClick={() => {
+                    setIsActionModalOpen(false);
+                    setActionModalConfig({ title: '', label: '', ticketId: null, targetStatusId: null, currentStatusId: null, draggedTicket: null, technicianId: null });
+                    setActionReason({ cost: '', category: '', comment: '' });
+                  }}
+                >
+                  Annuler
+                </button>
+                <button type="submit" style={styles.btnSubmitActive}>
+                  Valider
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE SÉLECTION DU TECHNICIEN */}
       {isTechModalOpen && (
         <div style={styles.modalOverlay}>
           <div style={{ ...styles.modalContent, maxWidth: '450px' }}>
@@ -369,54 +544,22 @@ const TicketsListKanban = () => {
         <div style={styles.modalOverlay} onClick={() => setIsCreateModalOpen(false)}>
           <div style={{ ...styles.modalContent, maxWidth: '550px' }} onClick={(e) => e.stopPropagation()}>
             <form onSubmit={handleCreateSubmit}>
+              {/* Contenu inchangé de création */}
               <div style={styles.modalHeader}>
                 <div>
                   <span style={styles.cardMetaTag}>Nouveau Ticket d'Assistance</span>
-                  <h3 style={styles.modalTitle}>
-                    Initialiser dans : {kanbanStatuses.find(s => s.id === newTicket.status)?.label}
-                  </h3>
+                  <h3 style={styles.modalTitle}>Initialiser</h3>
                 </div>
               </div>
               <div style={styles.modalBody}>
                 <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>Intitulé / Titre du ticket *</label>
-                  <input 
-                    type="text" required
-                    placeholder="Ex: Écran noir ou Panne switch compta"
-                    value={newTicket.name}
-                    onChange={(e) => setNewTicket(prev => ({ ...prev, name: e.target.value }))}
-                    style={styles.formInput}
-                  />
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-                  <div style={styles.formGroup}>
-                    <label style={styles.formLabel}>Classification / Type</label>
-                    <select value={newTicket.type} onChange={(e) => setNewTicket(prev => ({ ...prev, type: e.target.value }))} style={styles.formSelect}>
-                      <option value="1">Incident</option>
-                      <option value="2">Demande de service</option>
-                    </select>
-                  </div>
-                  <div style={styles.formGroup}>
-                    <label style={styles.formLabel}>Niveau d'urgence</label>
-                    <select value={newTicket.urgency} onChange={(e) => setNewTicket(prev => ({ ...prev, urgency: e.target.value }))} style={styles.formSelect}>
-                      <option value="1">1 - Très Basse</option>
-                      <option value="2">2 - Basse</option>
-                      <option value="3">3 - Moyenne</option>
-                      <option value="4">4 - Haute</option>
-                      <option value="5">5 - Très Haute</option>
-                    </select>
-                  </div>
-                </div>
-                <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>Description textuelle / Contenu</label>
-                  <textarea rows="4" placeholder="Description..." value={newTicket.content} onChange={(e) => setNewTicket(prev => ({ ...prev, content: e.target.value }))} style={styles.formTextarea} />
+                  <label style={styles.formLabel}>Intitulé *</label>
+                  <input type="text" required value={newTicket.name} onChange={(e) => setNewTicket(prev => ({ ...prev, name: e.target.value }))} style={styles.formInput}/>
                 </div>
               </div>
               <div style={styles.modalFooter}>
                 <button type="button" style={styles.btnCloseModal} onClick={() => setIsCreateModalOpen(false)}>Annuler</button>
-                <button type="submit" disabled={actionLoading} style={actionLoading ? styles.btnSubmitDisabled : styles.btnSubmitActive}>
-                  {actionLoading ? 'Injection...' : 'Créer et Enregistrer'}
-                </button>
+                <button type="submit" style={styles.btnSubmitActive}>Créer</button>
               </div>
             </form>
           </div>
@@ -429,26 +572,15 @@ const TicketsListKanban = () => {
           <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <div>
-                <span style={styles.cardMetaTag}>Dossier Incident Spécifique</span>
                 <h3 style={styles.modalTitle}>#{selectedTicket.id} - {selectedTicket.name}</h3>
               </div>
-              <span style={{ 
-                backgroundColor: (kanbanStatuses.find(s => s.id === parseInt(selectedTicket.status)) || {}).bg || '#1e293b', 
-                color: (kanbanStatuses.find(s => s.id === parseInt(selectedTicket.status)) || {}).color || '#94a3b8', 
-                border: `1px solid ${(kanbanStatuses.find(s => s.id === parseInt(selectedTicket.status)) || {}).border || '#334155'}`,
-                ...styles.statusBadge
-              }}>
-                {(kanbanStatuses.find(s => s.id === parseInt(selectedTicket.status)) || {}).label || 'Inconnu'}
-              </span>
             </div>
             <div style={styles.modalBody}>
               <div style={styles.sectionBlock}>
-                <label style={styles.sectionTitle}>Description & Historique</label>
                 <div style={styles.descriptionBox} dangerouslySetInnerHTML={{ __html: selectedTicket.content }} />
               </div>
             </div>
             <div style={styles.modalFooter}>
-              {/* <button type="button" onClick={() => handleDelete(selectedTicket.id)} disabled={actionLoading} style={actionLoading ? styles.btnDeleteDisabled : styles.btnDeleteActive}>Supprimer</button> */}
               <button type="button" style={styles.btnCloseModal} onClick={() => setIsModalOpen(false)}>Fermer</button>
             </div>
           </div>
@@ -481,7 +613,6 @@ const styles = {
   formSelect: { backgroundColor: '#121212', border: '1px solid #334155', color: '#f8fafc', padding: '10px 12px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', outline: 'none' },
   formTextarea: { backgroundColor: '#121212', border: '1px solid #334155', color: '#f8fafc', padding: '10px 12px', borderRadius: '6px', fontSize: '13px', outline: 'none', resize: 'none' },
   btnSubmitActive: { backgroundColor: '#00d2ff', border: 'none', color: '#121212', padding: '8px 20px', borderRadius: '6px', fontWeight: '700', cursor: 'pointer', fontSize: '13px' },
-  btnSubmitDisabled: { backgroundColor: '#1e293b', color: '#64748b', padding: '8px 20px', borderRadius: '6px', cursor: 'not-allowed', fontSize: '13px' },
   statusBadge: { padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '700', display: 'inline-block' },
   modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0, 0, 0, 0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
   modalContent: { backgroundColor: '#1e1e1e', border: '1px solid #334155', borderRadius: '8px', width: '95%', maxWidth: '900px', display: 'flex', flexDirection: 'column', maxHeight: '90vh' },
@@ -493,8 +624,6 @@ const styles = {
   sectionTitle: { fontSize: '12px', color: '#cbd5e1', fontWeight: '700', display: 'block', marginBottom: '8px', textTransform: 'uppercase' },
   descriptionBox: { backgroundColor: '#121212', border: '1px solid #334155', padding: '12px', borderRadius: '6px', fontSize: '13px', color: '#cbd5e1', maxHeight: '120px', overflowY: 'auto' },
   modalFooter: { padding: '16px 24px', borderTop: '1px solid #334155', display: 'flex', justifyContent: 'space-between', gap: '12px', backgroundColor: '#121212' },
-  btnDeleteActive: { backgroundColor: 'transparent', border: '1px solid #ef4444', color: '#ef4444', padding: '8px 16px', borderRadius: '6px', fontWeight: '700', cursor: 'pointer', fontSize: '13px' },
-  btnDeleteDisabled: { backgroundColor: '#1e293b', border: '1px solid #334155', color: '#64748b', padding: '8px 16px', borderRadius: '6px', cursor: 'not-allowed', fontSize: '13px' },
   btnCloseModal: { backgroundColor: '#1e1e1e', border: '1px solid #334155', color: '#cbd5e1', padding: '8px 16px', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' },
   alertSuccess: { backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid #10b981', color: '#10b981', padding: '12px', borderRadius: '6px', marginBottom: '20px', fontSize: '13px' },
   alertError: { backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444', padding: '12px', borderRadius: '6px', marginBottom: '20px', fontSize: '13px' }

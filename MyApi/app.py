@@ -9,14 +9,21 @@ def init_db():
     cursor = conn.cursor()
     
     # On garde PRIMARY KEY mais sans AUTOINCREMENT pour pouvoir forcer les ID de GLPI (1, 2, 5)
-    cursor.execute("""
+    cursor.executescript("""
         CREATE TABLE IF NOT EXISTS status (
             id INTEGER PRIMARY KEY,
             couleur TEXT,
             name_fr TEXT,
             name_en TEXT,
             name_mg TEXT
-        )
+        ); 
+        CREATE TABLE IF NOT EXISTS costItem (
+            id INTEGER PRIMARY KEY,
+            item_id TEXT,
+            cost INT DEFAULT 0,
+            prix INT DEFAULT 0,
+            id_ticket INT
+        );
     """)
     
     cursor.execute("SELECT COUNT(*) FROM status")
@@ -36,6 +43,7 @@ def init_db():
         """, default_statuses)
         
         print("-> Base SQLite initialisée avec les ID GLPI (1, 2, 5) et les traductions.")
+    
     
     conn.commit()
     conn.close()
@@ -88,7 +96,80 @@ def add_status():
     conn.close()
 
     return jsonify({"message": "Status added"}), 201
+@app.route("/cost", methods=["POST"])
+def add_cost():
+    data = request.get_json()
+    item_id = data.get("item_id")
+    cost = data.get("cost")
+    ticket= data.get("ticket_id")
     
+    conn = sqlite3.connect("test.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO costItem (item_id, cost,id_ticket) VALUES (?, ?,?)", 
+        (item_id, cost,ticket)
+    )
+    conn.commit()
+    conn.close()
+
+    return jsonify({"message": "Status added"}), 201
+@app.route("/costPrix", methods=["POST"])
+def add_Prix():
+    data = request.get_json()
+    item_id = data.get("item_id")
+    ticket=data.get("ticket_id")
+    cost = data.get("cost")
+    
+    conn = sqlite3.connect("test.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO costItem (item_id, prix,id_ticket) VALUES (?, ?,?)", 
+        (item_id, cost,ticket)
+    )
+    conn.commit()
+    conn.close()
+
+    return jsonify({"message": "Status added"}), 201
+@app.route("/cost/<int:ticket_id>", methods=["DELETE"])
+def delete(ticket_id):
+    conn = sqlite3.connect("test.db")
+    cursor = conn.cursor()
+    cursor.execute("DELETE  FROM costItem WHERE id_ticket = ? ",(ticket_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Status updated successfully"}), 200
+@app.route("/costLast",methods=["GET"])
+def getLast():
+    item = request.args.get("itemtype")
+    id_ticket=request.args.get("id_ticket")
+    conn = sqlite3.connect("test.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT cost FROM costItem WHERE item_id=? and id_ticket=? ",(item,id_ticket))
+    rows = cursor.fetchall()
+    cost_list = []
+    for row in rows:
+        cost_list.append({
+            "cost": row[0]
+        })
+    return jsonify(cost_list)
+@app.route("/cost", methods=["GET"])
+def get_cost():
+    conn = sqlite3.connect("test.db")
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT item_id, SUM(cost),SUM(prix) FROM costItem GROUP BY item_id")
+    rows = cursor.fetchall()
+    conn.close()
+
+    cost_list = []
+    for row in rows:
+        cost_list.append({
+            "item_id": row[0],
+            "cost": row[1],
+            "prix": row[2]
+        })
+    return jsonify(cost_list)
+
 @app.route("/status/<int:status_id>", methods=["PUT"])
 def update_status(status_id):
     data = request.get_json()
@@ -120,6 +201,25 @@ def update_status(status_id):
     conn.commit()
     conn.close()
     return jsonify({"message": "Status updated successfully"}), 200
+
+@app.route("/costAll", methods=["GET"])
+def get_Allcost():
+    conn = sqlite3.connect("test.db")
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT item_id, cost,id_ticket,prix FROM costItem ")
+    rows = cursor.fetchall()
+    conn.close()
+
+    cost_list = []
+    for row in rows:
+        cost_list.append({
+            "item_id": row[0],
+            "cost": row[1],
+            "id_ticket":row[2],
+            "prix":row[3]
+        })
+    return jsonify(cost_list)
 
 if __name__ == "__main__":
     app.run(port=5000, debug=True)

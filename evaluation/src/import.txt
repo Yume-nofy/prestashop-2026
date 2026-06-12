@@ -7,3 +7,6 @@ ordinateur
 
 ticket:
 cout:
+
+annulation,fafana ilay cout nataony farany
+reouverture(champs en pourcentage)->valider 10% coup farany->coup de reouverture
