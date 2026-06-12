@@ -228,7 +228,7 @@ const CsvDynamicTester = () => {
 
             const fileData = await zip.files[filePath].async('blob');
 
-            // 🔍 Validation structurelle (Anti-renommage)
+            //  Validation structurelle (Anti-renommage)
             const realType = await checkRealImageType(fileData);
 
             if (!realType.valid) {

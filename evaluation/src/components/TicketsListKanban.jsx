@@ -448,7 +448,7 @@ const TicketsListKanban = () => {
               </div>
             </div>
             <div style={styles.modalFooter}>
-              <button type="button" onClick={() => handleDelete(selectedTicket.id)} disabled={actionLoading} style={actionLoading ? styles.btnDeleteDisabled : styles.btnDeleteActive}>Supprimer</button>
+              {/* <button type="button" onClick={() => handleDelete(selectedTicket.id)} disabled={actionLoading} style={actionLoading ? styles.btnDeleteDisabled : styles.btnDeleteActive}>Supprimer</button> */}
               <button type="button" style={styles.btnCloseModal} onClick={() => setIsModalOpen(false)}>Fermer</button>
             </div>
           </div>

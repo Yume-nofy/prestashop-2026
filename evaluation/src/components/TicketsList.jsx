@@ -225,12 +225,12 @@ const TicketsList = () => {
                 <div style={styles.cardDate}>Indexation initiale : {selectedTicket.date || 'Donnée non synchronisée'}</div>
               </div>
               <span style={{ 
-                backgroundColor: (statusConfig[selectedTicket.status] || {}).bg || '#1e293b', 
+                backgroundColor: (kanbanStatuses[selectedTicket.status] || {}).bg || '#1e293b', 
                 color: (statusConfig[selectedTicket.status] || {}).color || '#94a3b8', 
                 border: `1px solid ${(statusConfig[selectedTicket.status] || {}).border || '#334155'}`,
                 ...styles.statusBadge
               }}>
-                {(statusConfig[selectedTicket.status] || {}).label || selectedTicket.status}
+                {(kanbanStatuses[selectedTicket.status] || {}).label || selectedTicket.status}
               </span>
             </div>
 
