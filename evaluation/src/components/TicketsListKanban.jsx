@@ -5,15 +5,15 @@ import { apiLocalStatus } from '../api/configApi';
 
 const TicketsListKanban = () => {
   const [tickets, setTickets] = useState([]);
-  const [news,setNews] = useState([]);
+  const [news, setNews] = useState([]);
   const [kanbanStatuses, setKanbanStatuses] = useState([]); 
   const [technicians, setTechnicians] = useState([]); 
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [VAleur,setVAleur]=useState(0);
+  const [VAleur, setVAleur] = useState(0);
   const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
-  const [ticketDetail,setTicketDetails]= useState([]);
+  const [ticketDetail, setTicketDetails] = useState([]);
   const [allLinks, setAllLinks] = useState([]);
   const [allCosts, setAllCosts] = useState([]);
   
@@ -25,7 +25,7 @@ const TicketsListKanban = () => {
   const [selectedTechId, setSelectedTechId] = useState('');
   const [pendingDropData, setPendingDropData] = useState(null);
 
-  // ÉTATS POUR LES POPUPS DE JUSTIFICATION (REMPLACEMENT WINDOW.PROMPT)
+  // ÉTATS POUR LES POPUPS DE JUSTIFICATION
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
   const [actionModalConfig, setActionModalConfig] = useState({ title: '', label: '', ticketId: null, targetStatusId: null, currentStatusId: null, draggedTicket: null, technicianId: null });
   const [actionReason, setActionReason] = useState({
@@ -104,81 +104,75 @@ const TicketsListKanban = () => {
   const handleDragOver = (e) => {
     e.preventDefault();
   };
-const Annuler = async (e, ticketId) => {
-  e.preventDefault();
-  try {
-    // Suppression des coûts locaux pour ce ticket
-    await apiLocalStatus(`cost/${ticketId}`, {
-      method: 'DELETE'
-    });
-    
-    // Poursuite du flux GLPI
-    const { targetStatusId, currentStatusId, draggedTicket, technicianId } = actionModalConfig;
-    processTicketUpdate(ticketId, targetStatusId, currentStatusId, draggedTicket, technicianId);
-  } catch (err) {
-    console.error("Erreur lors de l'annulation du coût :", err);
-  }
-}; 
 
-const reouverturAnnuler = async (e) => {
-  e.preventDefault();
-  
-  try {
-    if (news && news.item) {
-      const group = Date.now();
-
-      for (let listItem of news.item) {
-        const url = `costLast?itemtype=${listItem.item_id}&id_ticket=${news.idTicket}`;
-        const localStatuses = await apiLocalStatus(url);
-        
-        const lastCost = (localStatuses && localStatuses.length > 0) ? localStatuses[0].cost : 0;
-        
-        let valiny = (lastCost * Number(VAleur)) / 100;
-        
-        let editingStatus = { 
-          item_id: listItem.item_id,
-          cost: valiny || 0,
-          ticket_id: news.idTicket,
-          group:group
-        };
-        
-        await apiLocalStatus('costPrix', {
-          method: 'POST',
-          body: JSON.stringify(editingStatus)
-        });
-      }
+  const Annuler = async (e, ticketId) => {
+    e.preventDefault();
+    try {
+      await apiLocalStatus(`cost/${ticketId}`, {
+        method: 'DELETE'
+      });
+      
+      const { targetStatusId, currentStatusId, draggedTicket, technicianId } = actionModalConfig;
+      processTicketUpdate(ticketId, targetStatusId, currentStatusId, draggedTicket, technicianId);
+    } catch (err) {
+      console.error("Erreur lors de l'annulation du coût :", err);
     }
-    
-    setVAleur(0);
-    
-    const { ticketId, targetStatusId, currentStatusId, draggedTicket, technicianId } = actionModalConfig;
-    processTicketUpdate(ticketId, targetStatusId, currentStatusId, draggedTicket, technicianId);
-    
-  } catch (err) {
-    console.error("Erreur lors du recalcul de réouverture :", err);
-  }
-};
+  }; 
+
+  const reouverturAnnuler = async (e) => {
+    e.preventDefault();
+    try {
+      if (news && news.item) {
+        const group = Date.now();
+
+        for (let listItem of news.item) {
+          const url = `costLast?itemtype=${listItem.item_id}&id_ticket=${news.idTicket}`;
+          const localStatuses = await apiLocalStatus(url);
+          
+          const lastCost = (localStatuses && localStatuses.length > 0) ? localStatuses[0].cost : 0;
+          let valiny = (lastCost * Number(VAleur)) / 100;
+          
+          let editingStatus = { 
+            item_id: listItem.item_id,
+            cost: valiny || 0,
+            ticket_id: news.idTicket,
+            group: group
+          };
+          
+          await apiLocalStatus('costPrix', {
+            method: 'POST',
+            body: JSON.stringify(editingStatus)
+          });
+        }
+      }
+      
+      setVAleur(0);
+      const { ticketId, targetStatusId, currentStatusId, draggedTicket, technicianId } = actionModalConfig;
+      processTicketUpdate(ticketId, targetStatusId, currentStatusId, draggedTicket, technicianId);
+      
+    } catch (err) {
+      console.error("Erreur lors du recalcul de réouverture :", err);
+    }
+  };
+
   const handleDrop = async (e, targetStatusId) => {
     e.preventDefault();
     const ticketId = parseInt(e.dataTransfer.getData('text/plain'), 10);
     
     const draggedTicket = tickets.find(t => t.id === ticketId);
     const linkedItems = allLinks.filter(item => parseInt(item.tickets_id, 10) === ticketId);
-    const ilaina={idTicket:ticketId,item:[]};
+    const ilaina = { idTicket: ticketId, item: [] };
+
     for (const links of linkedItems) {
-        let editingStatus = { 
-          item_id: links.itemtype
-        };
-        ilaina.item.push(editingStatus);
-      }
-      console.log("edit",ilaina);
+      let editingStatus = { item_id: links.itemtype };
+      ilaina.item.push(editingStatus);
+    }
     setNews(ilaina);
     if (!draggedTicket) return;
 
     const currentStatusId = parseInt(draggedTicket.status, 10);
     if (currentStatusId === targetStatusId) return;
 
-    // --- RÈGLE 1 : INTERCEPTION POUR ASSIGNATION D'UN TECHNICIEN ---
     if (currentStatusId === STATUS_NEW && targetStatusId === STATUS_IN_PROGRESS) {
       if (technicians.length === 0) {
         alert("Aucun technicien disponible dans le système GLPI.");
@@ -203,7 +197,6 @@ const reouverturAnnuler = async (e) => {
   };
 
   const processTicketUpdate = async (ticketId, targetStatusId, currentStatusId, draggedTicket, technicianId) => {
-    // --- INTERCEPTION POUR LE FORMULAIRE DE CLÔTURE ---
     if (targetStatusId === STATUS_CLOSED && !actionModalConfig.ticketId) {
       setActionReason({ cost: '', category: '', comment: '' });
       setActionModalConfig({
@@ -215,7 +208,6 @@ const reouverturAnnuler = async (e) => {
       return;
     } 
     
-    // --- INTERCEPTION POUR LE FORMULAIRE DE RÉOUVERTURE ---
     if (currentStatusId === STATUS_CLOSED && targetStatusId !== STATUS_CLOSED && !actionModalConfig.ticketId) {
       setActionReason({ cost: '', category: '', comment: '' });
       setActionModalConfig({
@@ -229,20 +221,17 @@ const reouverturAnnuler = async (e) => {
 
     let updatePayload = { input: { id: ticketId, status: targetStatusId } };
     let rawComment = ""; 
-    
     const linkedItems = allLinks.filter(item => parseInt(item.tickets_id, 10) === ticketId);
 
-    // --- TRAITEMENT LOGIQUE SELON L'ACTION COCHÉE ---
     if (targetStatusId === STATUS_CLOSED) {
-      console.log("Clôture du ticket ID:", ticketId);
       const chosenCost = Number(actionReason.cost) || 0;
       const group = Date.now();
       for (const links of linkedItems) {
         let editingStatus = { 
-          ticket_id:ticketId,
-          cost:chosenCost/linkedItems.length,
-          item_id:links.itemtype,
-          group:group
+          ticket_id: ticketId,
+          cost: chosenCost / linkedItems.length,
+          item_id: links.itemtype,
+          group: group
         };
 
         await apiLocalStatus('cost', {
@@ -253,13 +242,10 @@ const reouverturAnnuler = async (e) => {
       rawComment = `<b>[Clôture ticket] : terminer</b>`;
 
     } else if (currentStatusId === STATUS_CLOSED && targetStatusId !== STATUS_CLOSED) {
-      console.log("Réouverture du ticket ID:", ticketId);
-      // Récupération sécurisée du commentaire de l'objet
       const chosenComment = actionReason.comment.trim() || "Aucune raison spécifiée";
       rawComment = `<b>[Réouverture du ticket] :</b> ${chosenComment}`;
     }
 
-    // --- TRAITEMENT STANDARD DE LA MISE À JOUR ---
     const previousTickets = [...tickets];
     setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, status: targetStatusId } : t));
 
@@ -417,7 +403,7 @@ const reouverturAnnuler = async (e) => {
         })}
       </div>
 
-      {/* POPUP DE RECOUVREMENT ADAPTATIF (CLÔTURE OU RÉOUVERTURE) */}
+      {/* POPUP DE RECOUVREMENT ADAPTATIF */}
       {isActionModalOpen && (
         <div style={styles.modalOverlay}>
           <div style={{ ...styles.modalContent, maxWidth: '450px' }}>
@@ -432,7 +418,7 @@ const reouverturAnnuler = async (e) => {
               <div style={styles.modalBody}>
                 <p style={{ fontSize: '13px', color: '#cbd5e1', marginBottom: '14px' }}>{actionModalConfig.label}</p>
 
-                {/* CHAMP UNIQUE POUR LA CLÔTURE (TARGET = CLOSED) */}
+                {/* CHAMP UNIQUE POUR LA CLÔTURE */}
                 {actionModalConfig.targetStatusId === STATUS_CLOSED && (
                   <div style={styles.formGroup}>
                     <label style={styles.formLabel}>SuperCost de résolution :</label>
@@ -447,41 +433,24 @@ const reouverturAnnuler = async (e) => {
                   </div>
                 )}
 
-                {/* CHAMP UNIQUE POUR LA RÉOUVERTURE (CURRENT = CLOSED) */}
+                {/* CHAMP UNIQUE POUR LA RÉOUVERTURE AVEC LE POURCENTAGE */}
                 {actionModalConfig.currentStatusId === STATUS_CLOSED && (
                   <div style={styles.formGroup}>
-                    <label style={styles.formLabel}>Justification / Commentaire :</label>
-                    {/* <textarea 
-                      value={actionReason.comment} 
-                      onChange={(e) => setActionReason(prev => ({ ...prev, comment: e.target.value }))} 
-                      style={styles.formTextarea}
-                      rows="4"
-                      placeholder="Indiquez la raison du retour en arrière..."
+                    <label style={styles.formLabel}>Valeur de reprise (Pourcentage %) :</label>
+                    <input 
+                      type="number" 
+                      placeholder="Ex: 50" 
+                      value={VAleur} 
+                      onChange={(e) => setVAleur(e.target.value)} 
+                      style={styles.formInput}
                       required
                       autoFocus
-                    /> */}
-         
-
-<input type="number" placeholder='pourcentage' value={VAleur} onChange={(e) => setVAleur(e.target.value)} />
-
-<button onClick={(e) => {
-    reouverturAnnuler(e); 
-    setIsActionModalOpen(false);
-  }} 
->
-  Réouverture
-</button>
-        <button onClick={(e) => {
-    Annuler(e, news.idTicket);
-    setIsActionModalOpen(false);
-  }}
->
-  Annulation
-</button>
+                    />
                   </div>
                 )}
               </div>
 
+              {/* PIED DE MODALE CORRIGÉ ET HARMONISÉ */}
               <div style={styles.modalFooter}>
                 <button 
                   type="button" 
@@ -492,11 +461,39 @@ const reouverturAnnuler = async (e) => {
                     setActionReason({ cost: '', category: '', comment: '' });
                   }}
                 >
-                  Annuler
+                  Fermer
                 </button>
-                {/* <button type="submit" style={styles.btnSubmitActive}>
-                  Valider
-                </button> */}
+
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  {actionModalConfig.targetStatusId === STATUS_CLOSED ? (
+                    <button type="submit" style={styles.btnSubmitActive}>
+                      Valider la Clôture
+                    </button>
+                  ) : (
+                    <>
+                      <button 
+                        type="button"
+                        style={styles.btnCancelAction}
+                        onClick={(e) => {
+                          Annuler(e, news.idTicket);
+                          setIsActionModalOpen(false);
+                        }}
+                      >
+                        Annulation
+                      </button>
+                      <button 
+                        type="button"
+                        style={styles.btnSubmitActive}
+                        onClick={(e) => {
+                          reouverturAnnuler(e); 
+                          setIsActionModalOpen(false);
+                        }}
+                      >
+                        Réouverture
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </form>
           </div>
@@ -549,7 +546,6 @@ const reouverturAnnuler = async (e) => {
         <div style={styles.modalOverlay} onClick={() => setIsCreateModalOpen(false)}>
           <div style={{ ...styles.modalContent, maxWidth: '550px' }} onClick={(e) => e.stopPropagation()}>
             <form onSubmit={handleCreateSubmit}>
-              {/* Contenu inchangé de création */}
               <div style={styles.modalHeader}>
                 <div>
                   <span style={styles.cardMetaTag}>Nouveau Ticket d'Assistance</span>
@@ -617,7 +613,8 @@ const styles = {
   formInput: { backgroundColor: '#121212', border: '1px solid #334155', color: '#f8fafc', padding: '10px 12px', borderRadius: '6px', fontSize: '13px', outline: 'none' },
   formSelect: { backgroundColor: '#121212', border: '1px solid #334155', color: '#f8fafc', padding: '10px 12px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', outline: 'none' },
   formTextarea: { backgroundColor: '#121212', border: '1px solid #334155', color: '#f8fafc', padding: '10px 12px', borderRadius: '6px', fontSize: '13px', outline: 'none', resize: 'none' },
-  btnSubmitActive: { backgroundColor: '#00d2ff', border: 'none', color: '#121212', padding: '8px 20px', borderRadius: '6px', fontWeight: '700', cursor: 'pointer', fontSize: '13px' },
+  btnSubmitActive: { backgroundColor: '#00d2ff', border: 'none', color: '#121212', padding: '8px 20px', borderRadius: '6px', fontWeight: '700', cursor: 'pointer', fontSize: '13px', transition: 'opacity 0.2s' },
+  btnCancelAction: { backgroundColor: '#ef4444', border: 'none', color: '#ffffff', padding: '8px 20px', borderRadius: '6px', fontWeight: '700', cursor: 'pointer', fontSize: '13px', transition: 'opacity 0.2s' },
   statusBadge: { padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '700', display: 'inline-block' },
   modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0, 0, 0, 0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
   modalContent: { backgroundColor: '#1e1e1e', border: '1px solid #334155', borderRadius: '8px', width: '95%', maxWidth: '900px', display: 'flex', flexDirection: 'column', maxHeight: '90vh' },
@@ -628,7 +625,7 @@ const styles = {
   sectionBlock: { marginBottom: '16px' },
   sectionTitle: { fontSize: '12px', color: '#cbd5e1', fontWeight: '700', display: 'block', marginBottom: '8px', textTransform: 'uppercase' },
   descriptionBox: { backgroundColor: '#121212', border: '1px solid #334155', padding: '12px', borderRadius: '6px', fontSize: '13px', color: '#cbd5e1', maxHeight: '120px', overflowY: 'auto' },
-  modalFooter: { padding: '16px 24px', borderTop: '1px solid #334155', display: 'flex', justifyContent: 'space-between', gap: '12px', backgroundColor: '#121212' },
+  modalFooter: { padding: '16px 24px', borderTop: '1px solid #334155', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', backgroundColor: '#121212' },
   btnCloseModal: { backgroundColor: '#1e1e1e', border: '1px solid #334155', color: '#cbd5e1', padding: '8px 16px', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' },
   alertSuccess: { backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid #10b981', color: '#10b981', padding: '12px', borderRadius: '6px', marginBottom: '20px', fontSize: '13px' },
   alertError: { backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444', padding: '12px', borderRadius: '6px', marginBottom: '20px', fontSize: '13px' }
