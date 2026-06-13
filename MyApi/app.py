@@ -3,12 +3,13 @@ import sqlite3
 from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
+
 # Fonction pour initialiser la base et ajouter la colonne si elle n'existe pas
 def init_db():
     conn = sqlite3.connect("test.db")
     cursor = conn.cursor()
     
-    # On garde PRIMARY KEY mais sans AUTOINCREMENT pour pouvoir forcer les ID de GLPI (1, 2, 5)
+    # On protège "group" avec des guillemets car c'est un mot-clé réservé SQL
     cursor.executescript("""
         CREATE TABLE IF NOT EXISTS status (
             id INTEGER PRIMARY KEY,
@@ -22,7 +23,8 @@ def init_db():
             item_id TEXT,
             cost INT DEFAULT 0,
             prix INT DEFAULT 0,
-            id_ticket INT
+            id_ticket INT,
+            "group" TIMESTAMP
         );
     """)
     
@@ -30,7 +32,6 @@ def init_db():
     count = cursor.fetchone()[0]
     
     if count == 0:
-        # Ici, le premier élément du tuple est directement l'ID GLPI
         default_statuses = [
             (1, '#00d2ff', 'Nouveau', ' ', 'Vaovao'),
             (2, '#38bdf8', 'En cours', ' ', 'Efa manao'),
@@ -42,8 +43,7 @@ def init_db():
             VALUES (?, ?, ?, ?, ?)
         """, default_statuses)
         
-        print("-> Base SQLite initialisée avec les ID GLPI (1, 2, 5) et les traductions.")
-    
+        print("-> Base SQLite initialisée avec les ID GLPI (1, 2, 6) et les traductions.")
     
     conn.commit()
     conn.close()
@@ -54,7 +54,6 @@ init_db()
 def get_status():
     lang = request.args.get("lang", "fr").lower()
     
-    # Mapping des colonnes selon la langue choisie
     if lang == "en":
         column_name = "name_en"
     elif lang == "mg":
@@ -74,7 +73,7 @@ def get_status():
         status_list.append({
             "id": row[0],
             "couleur": row[1],
-            "name": row[2] or "Sans nom" # Fallback si la traduction est vide
+            "name": row[2] or "Sans nom"
         })
     return jsonify(status_list)
 
@@ -96,68 +95,88 @@ def add_status():
     conn.close()
 
     return jsonify({"message": "Status added"}), 201
+
 @app.route("/cost", methods=["POST"])
 def add_cost():
     data = request.get_json()
     item_id = data.get("item_id")
     cost = data.get("cost")
-    ticket= data.get("ticket_id")
+    ticket = data.get("ticket_id")
+    group = data.get("group")
     
     conn = sqlite3.connect("test.db")
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO costItem (item_id, cost,id_ticket) VALUES (?, ?,?)", 
-        (item_id, cost,ticket)
+        'INSERT INTO costItem (item_id, cost, id_ticket, "group") VALUES (?, ?, ?, ?)', 
+        (item_id, cost, ticket, group)
     )
     conn.commit()
     conn.close()
 
-    return jsonify({"message": "Status added"}), 201
+    return jsonify({"message": "Cost added"}), 201
+
 @app.route("/costPrix", methods=["POST"])
 def add_Prix():
     data = request.get_json()
     item_id = data.get("item_id")
-    ticket=data.get("ticket_id")
+    ticket = data.get("ticket_id")
     cost = data.get("cost")
+    group = data.get("group")
     
     conn = sqlite3.connect("test.db")
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO costItem (item_id, prix,id_ticket) VALUES (?, ?,?)", 
-        (item_id, cost,ticket)
+        'INSERT INTO costItem (item_id, prix, id_ticket, "group") VALUES (?, ?, ?, ?)', 
+        (item_id, cost, ticket, group)
     )
     conn.commit()
     conn.close()
 
-    return jsonify({"message": "Status added"}), 201
+    return jsonify({"message": "Prix added"}), 201
+
 @app.route("/cost/<int:ticket_id>", methods=["DELETE"])
 def delete(ticket_id):
     conn = sqlite3.connect("test.db")
     cursor = conn.cursor()
-    cursor.execute("DELETE  FROM costItem WHERE id_ticket = ? ",(ticket_id,))
+    
+    cursor.execute('SELECT "group" FROM costItem WHERE id_ticket = ? ORDER BY "group" DESC LIMIT 1', (ticket_id,))
+    row = cursor.fetchone()
+    
+    if not row:
+        conn.close()
+        return jsonify({"message": "No record found for this ticket"}), 404
+        
+    target_id = row[0]
+    
+    cursor.execute('DELETE FROM costItem WHERE "group" = ?', (target_id,))
     conn.commit()
     conn.close()
-    return jsonify({"message": "Status updated successfully"}), 200
-@app.route("/costLast",methods=["GET"])
+    return jsonify({"message": "Last cost record deleted successfully"}), 200
+
+@app.route("/costLast", methods=["GET"])
 def getLast():
     item = request.args.get("itemtype")
-    id_ticket=request.args.get("id_ticket")
+    id_ticket = request.args.get("id_ticket")
+    
     conn = sqlite3.connect("test.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT cost FROM costItem WHERE item_id=? and id_ticket=? ",(item,id_ticket))
+    cursor.execute('SELECT cost FROM costItem WHERE item_id=? and id_ticket=? ORDER BY "group" DESC', (item, id_ticket))
     rows = cursor.fetchall()
+    conn.close() 
+
     cost_list = []
     for row in rows:
         cost_list.append({
             "cost": row[0]
         })
     return jsonify(cost_list)
+
 @app.route("/cost", methods=["GET"])
 def get_cost():
     conn = sqlite3.connect("test.db")
     cursor = conn.cursor()
     
-    cursor.execute("SELECT item_id, SUM(cost),SUM(prix) FROM costItem GROUP BY item_id")
+    cursor.execute('SELECT item_id, SUM(cost), SUM(prix),"group" FROM costItem GROUP BY item_id')
     rows = cursor.fetchall()
     conn.close()
 
@@ -166,7 +185,8 @@ def get_cost():
         cost_list.append({
             "item_id": row[0],
             "cost": row[1],
-            "prix": row[2]
+            "prix": row[2],
+            "group": row[3]
         })
     return jsonify(cost_list)
 
@@ -177,7 +197,6 @@ def update_status(status_id):
     conn = sqlite3.connect("test.db")
     cursor = conn.cursor()
     
-    # 1. On récupère d'abord les valeurs actuelles en base de données
     cursor.execute("SELECT couleur, name_fr, name_en, name_mg FROM status WHERE id = ?", (status_id,))
     current_status = cursor.fetchone()
     
@@ -185,13 +204,11 @@ def update_status(status_id):
         conn.close()
         return jsonify({"message": "Status not found"}), 404
         
-    # 2. Si le champ envoyé est vide/nul, on reprend l'ancienne valeur
     couleur = data.get("couleur") if data.get("couleur") else current_status[0]
     name_fr = data.get("name_fr") if data.get("name_fr") else current_status[1]
     name_en = data.get("name_en") if data.get("name_en") else current_status[2]
     name_mg = data.get("name_mg") if data.get("name_mg") else current_status[3]
 
-    # 3. On applique la mise à jour avec les valeurs fusionnées
     cursor.execute("""
         UPDATE status 
         SET couleur = ?, name_fr = ?, name_en = ?, name_mg = ? 
@@ -207,7 +224,7 @@ def get_Allcost():
     conn = sqlite3.connect("test.db")
     cursor = conn.cursor()
     
-    cursor.execute("SELECT item_id, cost,id_ticket,prix FROM costItem ")
+    cursor.execute("SELECT item_id, cost, id_ticket, prix FROM costItem")
     rows = cursor.fetchall()
     conn.close()
 
@@ -216,8 +233,8 @@ def get_Allcost():
         cost_list.append({
             "item_id": row[0],
             "cost": row[1],
-            "id_ticket":row[2],
-            "prix":row[3]
+            "id_ticket": row[2],
+            "prix": row[3]
         })
     return jsonify(cost_list)
 

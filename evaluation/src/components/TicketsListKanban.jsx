@@ -125,6 +125,8 @@ const reouverturAnnuler = async (e) => {
   
   try {
     if (news && news.item) {
+      const group = Date.now();
+
       for (let listItem of news.item) {
         const url = `costLast?itemtype=${listItem.item_id}&id_ticket=${news.idTicket}`;
         const localStatuses = await apiLocalStatus(url);
@@ -136,7 +138,8 @@ const reouverturAnnuler = async (e) => {
         let editingStatus = { 
           item_id: listItem.item_id,
           cost: valiny || 0,
-          ticket_id: news.idTicket
+          ticket_id: news.idTicket,
+          group:group
         };
         
         await apiLocalStatus('costPrix', {
@@ -233,12 +236,13 @@ const reouverturAnnuler = async (e) => {
     if (targetStatusId === STATUS_CLOSED) {
       console.log("Clôture du ticket ID:", ticketId);
       const chosenCost = Number(actionReason.cost) || 0;
-
+      const group = Date.now();
       for (const links of linkedItems) {
         let editingStatus = { 
           ticket_id:ticketId,
           cost:chosenCost/linkedItems.length,
-          item_id:links.itemtype
+          item_id:links.itemtype,
+          group:group
         };
 
         await apiLocalStatus('cost', {
@@ -456,15 +460,9 @@ const reouverturAnnuler = async (e) => {
                       required
                       autoFocus
                     /> */}
-                 <button onClick={(e) => {
-    Annuler(e, news.idTicket);
-    setIsActionModalOpen(false);
-  }}
->
-  Annuler
-</button>
+         
 
-<input type="number" value={VAleur} onChange={(e) => setVAleur(e.target.value)} />
+<input type="number" placeholder='pourcentage' value={VAleur} onChange={(e) => setVAleur(e.target.value)} />
 
 <button onClick={(e) => {
     reouverturAnnuler(e); 
@@ -472,6 +470,13 @@ const reouverturAnnuler = async (e) => {
   }} 
 >
   Réouverture
+</button>
+        <button onClick={(e) => {
+    Annuler(e, news.idTicket);
+    setIsActionModalOpen(false);
+  }}
+>
+  Annulation
 </button>
                   </div>
                 )}
@@ -489,9 +494,9 @@ const reouverturAnnuler = async (e) => {
                 >
                   Annuler
                 </button>
-                <button type="submit" style={styles.btnSubmitActive}>
+                {/* <button type="submit" style={styles.btnSubmitActive}>
                   Valider
-                </button>
+                </button> */}
               </div>
             </form>
           </div>
